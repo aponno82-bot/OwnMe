@@ -1,6 +1,7 @@
 export interface Profile {
   id: string;
   username: string;
+  email?: string;
   full_name: string | null;
   avatar_url: string | null;
   cover_url: string | null;
@@ -62,6 +63,15 @@ export interface Story {
   expires_at: string;
   created_at: string;
   profiles?: Profile;
+  reactions?: StoryReaction[];
+}
+
+export interface StoryReaction {
+  id: string;
+  story_id: string;
+  user_id: string;
+  type: string;
+  created_at: string;
 }
 
 export interface Message {
@@ -126,4 +136,11 @@ export interface Announcement {
   created_by: string;
   created_at: string;
   target_role?: 'all' | 'admin' | 'user';
+}
+
+export interface Block {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
 }

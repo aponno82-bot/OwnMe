@@ -52,7 +52,7 @@ export default function AdminPanel() {
       } else if (activeTab === 'reports') {
         const { data } = await supabase
           .from('reports')
-          .select('*, reporter:profiles!reporter_id(*)')
+          .select('*, reporter:profiles!reporter_id(*), target_user:profiles!target_id(*)')
           .order('created_at', { ascending: false });
         if (data) setReports(data);
       } else if (activeTab === 'announcements') {
@@ -100,6 +100,22 @@ export default function AdminPanel() {
       setIsAnnouncementModalOpen(false);
       setNewAnnouncement({ title: '', content: '', target_role: 'all' });
       fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+      toast.success('Announcement deleted');
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -286,7 +302,7 @@ export default function AdminPanel() {
                         </div>
                         <div>
                           <p className="text-sm font-bold text-gray-900">
-                            Reported {report.target_type}
+                            Reported {report.target_type}: {report.target_user?.username || 'Unknown'}
                           </p>
                           <p className="text-xs text-gray-500">
                             By @{report.reporter?.username} • {formatDate(report.created_at)}
@@ -337,15 +353,23 @@ export default function AdminPanel() {
             {activeTab === 'announcements' && (
               <div className="space-y-4">
                 {announcements.map((ann) => (
-                  <div key={ann.id} className="p-6 rounded-3xl border border-emerald-100 bg-emerald-50/30">
+                  <div key={ann.id} className="p-6 rounded-3xl border border-emerald-100 bg-emerald-50/30 relative group">
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h3 className="text-lg font-bold text-gray-900">{ann.title}</h3>
                         <p className="text-xs text-gray-500">Published on {formatDate(ann.created_at)}</p>
                       </div>
-                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                        Target: {ann.target_role}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                          Target: {ann.target_role}
+                        </span>
+                        <button 
+                          onClick={() => deleteAnnouncement(ann.id)}
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-700 leading-relaxed">{ann.content}</p>
                   </div>

@@ -28,6 +28,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
   const [incomingCall, setIncomingCall] = useState<{ from: Profile, type: 'audio' | 'video' } | null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [isBlockingMe, setIsBlockingMe] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -169,7 +171,33 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     }
   }
 
+  async function checkBlockStatus(contactId: string) {
+    if (!user) return;
+    try {
+      const { data: blockedByMe } = await supabase
+        .from('blocks')
+        .select('*')
+        .eq('blocker_id', user.id)
+        .eq('blocked_id', contactId)
+        .single();
+      
+      setIsBlocked(!!blockedByMe);
+
+      const { data: blockedByThem } = await supabase
+        .from('blocks')
+        .select('*')
+        .eq('blocker_id', contactId)
+        .eq('blocked_id', user.id)
+        .single();
+      
+      setIsBlockingMe(!!blockedByThem);
+    } catch (error) {
+      console.error('Error checking block status:', error);
+    }
+  }
+
   async function fetchMessages(contactId: string) {
+    checkBlockStatus(contactId);
     const { data } = await supabase
       .from('messages')
       .select('*')
@@ -555,37 +583,52 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
           </div>
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar bg-gray-50/30">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
-                <div className="flex flex-col gap-1 max-w-[80%]">
-                  <div className={cn(
-                    "p-3 rounded-2xl text-sm shadow-sm",
-                    msg.sender_id === user?.id 
-                      ? 'bg-emerald-500 text-white rounded-tr-none' 
-                      : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
-                  )}>
-                    {renderMessageContent(msg)}
+            {isBlocked || isBlockingMe ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                <ShieldAlert className="w-12 h-12 text-gray-300 mb-4" />
+                <h3 className="text-lg font-bold text-gray-900">
+                  {isBlocked ? 'You have blocked this user' : 'You are blocked'}
+                </h3>
+                <p className="text-sm text-gray-500 max-w-[200px]">
+                  {isBlocked ? 'Unblock them to send messages.' : 'You cannot send messages to this user.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
+                    <div className="flex flex-col gap-1 max-w-[80%]">
+                      <div className={cn(
+                        "p-3 rounded-2xl text-sm shadow-sm",
+                        msg.sender_id === user?.id 
+                          ? 'bg-emerald-500 text-white rounded-tr-none' 
+                          : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
+                      )}>
+                        {renderMessageContent(msg)}
+                      </div>
+                      <span className={cn(
+                        "text-[9px] font-medium",
+                        msg.sender_id === user?.id ? "text-right text-gray-400" : "text-left text-gray-400"
+                      )}>
+                        {formatDate(msg.created_at)}
+                      </span>
+                    </div>
                   </div>
-                  <span className={cn(
-                    "text-[9px] font-medium",
-                    msg.sender_id === user?.id ? "text-right text-gray-400" : "text-left text-gray-400"
-                  )}>
-                    {formatDate(msg.created_at)}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {uploading && (
-              <div className="flex justify-end">
-                <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl rounded-tr-none flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-xs font-bold">Uploading...</span>
-                </div>
-              </div>
+                ))}
+                {uploading && (
+                  <div className="flex justify-end">
+                    <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl rounded-tr-none flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-xs font-bold">Uploading...</span>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
-          <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-50 bg-white shrink-0">
+          {!isBlocked && !isBlockingMe && (
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-50 bg-white shrink-0">
             <div className="flex items-center gap-2">
               {isRecording ? (
                 <div className="flex-1 flex items-center gap-4 px-4 py-2 bg-rose-50 rounded-2xl">
@@ -649,10 +692,11 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
               )}
             </div>
           </form>
-        </div>
+        )}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="flex flex-col h-full">

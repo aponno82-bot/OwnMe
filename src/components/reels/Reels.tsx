@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Post } from '../../types';
-import { Heart, MessageCircle, Share2, Music2, User as UserIcon, Loader2, ChevronUp, ChevronDown, Video, X, Send } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music2, User as UserIcon, Loader2, ChevronUp, ChevronDown, Video, X, Send, Flag, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../lib/useAuth';
 import { useConnections } from '../../lib/useConnections';
@@ -23,7 +23,32 @@ function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const { isFollowing, toggleFollow, loading: followLoading } = useConnections(reel.user_id);
+
+  const handleReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !reportReason.trim()) return;
+    setIsSubmittingReport(true);
+    try {
+      const { error } = await supabase.from('reports').insert({
+        reporter_id: user.id,
+        target_id: reel.id,
+        target_type: 'post',
+        reason: reportReason.trim()
+      });
+      if (error) throw error;
+      toast.success('Report submitted. Our team will review this reel.');
+      setIsReporting(false);
+      setReportReason('');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
 
   useEffect(() => {
     if (isActive && videoRef.current) {
@@ -177,6 +202,16 @@ function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
           </div>
           <span className="text-white text-xs font-bold shadow-sm">{reel.shares_count || 0}</span>
         </button>
+
+        <button 
+          onClick={() => setIsReporting(true)}
+          className="flex flex-col items-center gap-1 group"
+        >
+          <div className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-all active:scale-90">
+            <Flag className="w-7 h-7" />
+          </div>
+          <span className="text-white text-xs font-bold shadow-sm">Report</span>
+        </button>
       </div>
 
       {/* Bottom Info */}
@@ -195,12 +230,17 @@ function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
             )}
           </div>
           <div className="flex-1">
-            <h3 
-              className="text-white font-bold text-lg cursor-pointer hover:underline"
+            <div 
+              className="flex items-center gap-1 cursor-pointer group/name"
               onClick={() => onUserClick(reel.user_id)}
             >
-              @{reel.profiles?.username}
-            </h3>
+              <h3 className="text-white font-bold text-lg group-hover/name:underline">
+                @{reel.profiles?.username}
+              </h3>
+              {reel.profiles?.is_verified && (
+                <CheckCircle className="w-4 h-4 text-blue-500 fill-current shadow-sm" />
+              )}
+            </div>
             {user?.id !== reel.user_id && (
               <button 
                 onClick={toggleFollow}
@@ -264,7 +304,12 @@ function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
                     </div>
                     <div className="flex-1">
                       <div className="bg-gray-50 rounded-2xl px-4 py-2">
-                        <span className="text-xs font-bold text-gray-900 block mb-1">{comment.profiles?.username}</span>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="text-xs font-bold text-gray-900">{comment.profiles?.username}</span>
+                          {comment.profiles?.is_verified && (
+                            <CheckCircle className="w-3 h-3 text-blue-500 fill-current shadow-sm" />
+                          )}
+                        </div>
                         <p className="text-sm text-gray-700">{comment.text}</p>
                       </div>
                     </div>
@@ -299,6 +344,64 @@ function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
           </>
         )}
       </AnimatePresence>
+
+      {/* Report Modal */}
+      <AnimatePresence>
+        {isReporting && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-rose-50/50">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Flag className="w-5 h-5 text-rose-500" />
+                  Report Reel
+                </h2>
+                <button 
+                  onClick={() => setIsReporting(false)}
+                  className="p-2 hover:bg-white rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+
+              <form onSubmit={handleReport} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Reason for reporting</label>
+                  <textarea 
+                    required
+                    rows={4}
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-rose-500/20 resize-none text-sm"
+                    placeholder="Please describe why you are reporting this reel..."
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setIsReporting(false)}
+                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-2xl hover:bg-gray-200 transition-all text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSubmittingReport || !reportReason.trim()}
+                    className="flex-1 px-6 py-3 bg-rose-500 text-white font-bold rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 text-sm disabled:opacity-50"
+                  >
+                    {isSubmittingReport ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Submit Report'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -307,11 +410,26 @@ export default function Reels({ onUserClick }: { onUserClick: (id: string) => vo
   const [reels, setReels] = useState<Post[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [blockedIds, setBlockedIds] = useState<string[]>([]);
+  const { user } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    fetchBlockedIds();
     fetchReels();
   }, []);
+
+  async function fetchBlockedIds() {
+    if (!user) return;
+    const { data } = await supabase
+      .from('blocks')
+      .select('blocked_id')
+      .eq('blocker_id', user.id);
+    
+    if (data) {
+      setBlockedIds(data.map(b => b.blocked_id));
+    }
+  }
 
   async function fetchReels() {
     try {
@@ -364,15 +482,17 @@ export default function Reels({ onUserClick }: { onUserClick: (id: string) => vo
         onScroll={handleScroll}
         className="h-full w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar"
       >
-        {reels.map((reel, index) => (
-          <div key={reel.id} className="h-full w-full snap-start">
-            <ReelCard 
-              reel={reel} 
-              isActive={index === activeIndex} 
-              onUserClick={onUserClick}
-            />
-          </div>
-        ))}
+        {reels
+          .filter(reel => !blockedIds.includes(reel.user_id))
+          .map((reel, index) => (
+            <div key={reel.id} className="h-full w-full snap-start">
+              <ReelCard 
+                reel={reel} 
+                isActive={index === activeIndex} 
+                onUserClick={onUserClick}
+              />
+            </div>
+          ))}
       </div>
 
       {/* Navigation Arrows */}

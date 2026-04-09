@@ -41,6 +41,16 @@ export default function Settings() {
           <h2 className="text-xl font-bold mb-6">Personal Information</h2>
           <div className="space-y-4">
             <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Email Address</label>
+              <input 
+                type="email" 
+                disabled
+                value={user?.email || ''}
+                className="w-full px-4 py-3 bg-gray-100 border-none rounded-2xl text-sm text-gray-500 cursor-not-allowed"
+              />
+              <p className="text-[10px] text-gray-400">Email cannot be changed for security reasons.</p>
+            </div>
+            <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Full Name</label>
               <input 
                 type="text" 

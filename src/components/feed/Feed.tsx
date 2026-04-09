@@ -17,9 +17,10 @@ interface FeedProps {
 }
 
 export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [aiPosts, setAiPosts] = useState<Post[]>([]);
+  const [blockedIds, setBlockedIds] = useState<string[]>([]);
   const [feedType, setFeedType] = useState<'latest' | 'ai'>('latest');
   const [aiExplanation, setAiExplanation] = useState('');
   const [loading, setLoading] = useState(true);
@@ -27,6 +28,7 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
   const instanceId = useState(() => Math.random().toString(36).substring(7))[0];
 
   useEffect(() => {
+    fetchBlockedIds();
     fetchPosts();
 
     // Real-time subscription for new posts
@@ -46,6 +48,18 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  async function fetchBlockedIds() {
+    if (!user) return;
+    const { data } = await supabase
+      .from('blocks')
+      .select('blocked_id')
+      .eq('blocker_id', user.id);
+    
+    if (data) {
+      setBlockedIds(data.map(b => b.blocked_id));
+    }
+  }
 
   async function fetchPosts() {
     try {
@@ -154,10 +168,12 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
           ))
         ) : (
           <AnimatePresence mode="popLayout">
-            {(feedType === 'latest' ? posts : aiPosts).map((post) => (
-              <motion.div
-                key={post.id}
-                initial={{ opacity: 0, y: 20 }}
+            {(feedType === 'latest' ? posts : aiPosts)
+              .filter(post => !blockedIds.includes(post.user_id))
+              .map((post) => (
+                <motion.div
+                  key={post.id}
+                  initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 layout

@@ -91,20 +91,30 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
     }
   };
 
-  const handleReport = async () => {
-    if (!user) return;
+  const isOwnPost = user?.id === post.user_id;
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+
+  const handleReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !reportReason.trim()) return;
+    setIsUpdating(true);
     try {
       const { error } = await supabase.from('reports').insert({
         reporter_id: user.id,
         target_id: post.id,
         target_type: 'post',
-        reason: 'Reported from UI'
+        reason: reportReason.trim()
       });
       if (error) throw error;
-      toast.info('Report submitted. Our team will review this post.');
+      toast.success('Report submitted. Our team will review this post.');
+      setIsReporting(false);
+      setReportReason('');
       setShowMenu(false);
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -375,7 +385,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                     )}>
                       {comment.profiles?.full_name || comment.profiles?.username}
                       {comment.profiles?.is_verified && (
-                        <CheckCircle className="w-3 h-3 text-blue-500 fill-current" />
+                        <CheckCircle className="w-3 h-3 text-blue-500 fill-current shadow-sm" />
                       )}
                     </span>
                     <span className="text-[10px] text-gray-400">{formatDate(comment.created_at)}</span>
@@ -430,7 +440,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                   {post.profiles?.full_name || post.profiles?.username}
                 </h3>
                 {post.profiles?.is_verified && (
-                  <CheckCircle className="w-3.5 h-3.5 text-blue-500 fill-current" />
+                  <CheckCircle className="w-4 h-4 text-blue-500 fill-current shadow-sm" />
                 )}
               </div>
               {post.feeling && (
@@ -471,9 +481,15 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
                 className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-20"
               >
-                <button className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                  <Bookmark className="w-4 h-4" />
-                  Save Post
+                <button 
+                  onClick={() => {
+                    toggleSave();
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Bookmark className={cn("w-4 h-4", isSaved && "fill-current text-emerald-500")} />
+                  {isSaved ? 'Saved' : 'Save Post'}
                 </button>
                 <button 
                   onClick={() => {
@@ -486,17 +502,13 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                   <Share2 className="w-4 h-4" />
                   Copy Link
                 </button>
-                <button 
-                  onClick={handleReport}
-                  className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Flag className="w-4 h-4" />
-                  Report Post
-                </button>
-                {user?.id === post.user_id && (
+                {isOwnPost ? (
                   <>
                     <button 
-                      onClick={() => setIsEditing(true)}
+                      onClick={() => {
+                        setIsEditing(true);
+                        setShowMenu(false);
+                      }}
                       className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                     >
                       <Edit3 className="w-4 h-4" />
@@ -511,6 +523,17 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                       {isDeleting ? 'Deleting...' : 'Delete Post'}
                     </button>
                   </>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setIsReporting(true);
+                      setShowMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                  >
+                    <Flag className="w-4 h-4" />
+                    Report Post
+                  </button>
                 )}
               </motion.div>
             )}
@@ -768,6 +791,63 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
               </form>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Report Modal */}
+      <AnimatePresence>
+        {isReporting && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-rose-50/50">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Flag className="w-5 h-5 text-rose-500" />
+                  Report Post
+                </h2>
+                <button 
+                  onClick={() => setIsReporting(false)}
+                  className="p-2 hover:bg-white rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+
+              <form onSubmit={handleReport} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Reason for reporting</label>
+                  <textarea 
+                    required
+                    rows={4}
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-rose-500/20 resize-none text-sm"
+                    placeholder="Please describe why you are reporting this post..."
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setIsReporting(false)}
+                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-2xl hover:bg-gray-200 transition-all text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isUpdating || !reportReason.trim()}
+                    className="flex-1 px-6 py-3 bg-rose-500 text-white font-bold rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 text-sm disabled:opacity-50"
+                  >
+                    {isUpdating ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Submit Report'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

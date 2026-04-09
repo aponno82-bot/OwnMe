@@ -6,7 +6,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export async function getAIFeedRecommendations(posts: Post[], userProfile: Profile | null): Promise<{ posts: Post[], explanation: string }> {
   if (!posts.length) return { posts, explanation: '' };
 
-  // 1. Calculate Trending Score (Non-AI Fallback)
+  // 1. Calculate Dynamic Trending Score (Non-AI Fallback)
   const trendingScores = new Map<string, number>();
   const hashtagCounts = new Map<string, number>();
   
@@ -18,45 +18,64 @@ export async function getAIFeedRecommendations(posts: Post[], userProfile: Profi
   posts.forEach(p => {
     let score = 0;
     const tags = p.content.match(/#[a-z0-9_]+/gi) || [];
+    
+    // Hashtag popularity weight
     tags.forEach(tag => {
-      score += (hashtagCounts.get(tag) || 0) * 2; // Hashtag popularity
+      score += (hashtagCounts.get(tag) || 0) * 1.5;
     });
     
-    // Recency boost (newer posts get higher base score)
+    // Recency boost (exponential decay)
     const hoursOld = (Date.now() - new Date(p.created_at).getTime()) / (1000 * 60 * 60);
-    score += Math.max(0, 24 - hoursOld); 
+    score += Math.max(0, 50 * Math.exp(-hoursOld / 12)); // Strong boost for first 12 hours
+    
+    // Interaction weight (if available)
+    score += (p.reactions_count || 0) * 5;
+    score += (p.comments_count || 0) * 10;
+    
+    // Personalization boost (Workplace/School match)
+    if (userProfile) {
+      if (p.profiles?.workplace && userProfile.workplace && p.profiles.workplace === userProfile.workplace) score += 30;
+      if (p.profiles?.school && userProfile.school && p.profiles.school === userProfile.school) score += 20;
+      if (p.profiles?.address && userProfile.address && p.profiles.address === userProfile.address) score += 15;
+    }
+
+    // Random discovery factor (5-10% variance)
+    score *= (0.9 + Math.random() * 0.2);
     
     trendingScores.set(p.id, score);
   });
 
-  // Limit to top 20 latest posts to avoid hitting token/quota limits
-  const postsToRank = posts.slice(0, 20);
+  // Limit to top 30 posts for AI ranking to ensure variety
+  const postsToRank = posts.slice(0, 30);
 
   try {
     const prompt = `
-      You are an advanced social media recommendation algorithm for "OwnMe".
+      You are a dynamic recommendation engine for "OwnMe".
       
-      User Context:
+      User Profile:
       - Name: ${userProfile?.full_name || 'User'}
       - Bio: ${userProfile?.bio || 'No bio'}
-      - Interests: Based on their bio and profile.
+      - Workplace: ${userProfile?.workplace || 'Not specified'}
+      - School: ${userProfile?.school || 'Not specified'}
       
-      Available Posts to Rank:
+      Available Posts:
       ${postsToRank.map(p => {
         const tags = p.content.match(/#[a-z0-9_]+/gi) || [];
-        return `[ID: ${p.id}] "${p.content.substring(0, 100)}..." | Tags: ${tags.join(', ')}`;
+        return `[ID: ${p.id}] Author: ${p.profiles?.username} | Content: "${p.content.substring(0, 120)}" | Tags: ${tags.join(', ')}`;
       }).join('\n')}
       
-      Ranking Criteria:
-      1. PERSONALIZATION: Prioritize posts that match the user's bio/interests.
-      2. ENGAGEMENT: Prioritize posts with popular hashtags.
-      3. QUALITY: Prioritize meaningful content over spam.
-      4. VARIETY: Ensure a mix of topics.
+      Task:
+      Rank these posts to create a "For You" feed. 
+      Prioritize:
+      1. Shared context (same workplace/school).
+      2. Interests mentioned in the user's bio.
+      3. High-quality, engaging content.
+      4. Freshness and variety.
       
-      Output Format:
+      Output JSON:
       {
         "rankedIds": ["id1", "id2", ...],
-        "explanation": "A short, friendly sentence explaining why these posts were chosen for this specific user."
+        "explanation": "A short, engaging sentence about why this feed is special for them today."
       }
     `;
 

@@ -63,15 +63,16 @@ export interface Story {
   expires_at: string;
   created_at: string;
   profiles?: Profile;
-  reactions?: StoryReaction[];
+  story_reactions?: StoryReaction[];
 }
 
 export interface StoryReaction {
   id: string;
   story_id: string;
   user_id: string;
-  type: string;
+  emoji: string;
   created_at: string;
+  profiles?: Profile;
 }
 
 export interface Message {

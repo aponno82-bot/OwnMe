@@ -30,15 +30,23 @@ export default function StoryBar() {
     fetchBlockedIds();
     fetchStories();
 
-    const channel = supabase
+    const storiesChannel = supabase
       .channel(`public:stories:${instanceId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stories' }, () => {
         fetchStories();
       })
       .subscribe();
 
+    const reactionsChannel = supabase
+      .channel(`public:story_reactions:${instanceId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'story_reactions' }, () => {
+        fetchStories();
+      })
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(storiesChannel);
+      supabase.removeChannel(reactionsChannel);
     };
   }, []);
 
@@ -58,7 +66,7 @@ export default function StoryBar() {
     const now = new Date().toISOString();
     const { data, error } = await supabase
       .from('stories')
-      .select('*, profiles (*)')
+      .select('*, profiles (*), story_reactions (*, profiles (*))')
       .gt('expires_at', now)
       .order('created_at', { ascending: true });
 
@@ -66,7 +74,7 @@ export default function StoryBar() {
       console.error('Error fetching stories:', error);
     } else if (data) {
       // Group stories by user and filter out blocked users
-      const grouped = data.reduce((acc: UserStories[], story: Story) => {
+      const grouped = data.reduce((acc: UserStories[], story: any) => {
         if (blockedIds.includes(story.user_id)) return acc;
         
         const existing = acc.find(u => u.userId === story.user_id);
@@ -386,6 +394,24 @@ export default function StoryBar() {
                     <h4 className="text-sm font-bold text-white">{userStories[activeUserIndex].profile?.full_name || userStories[activeUserIndex].profile?.username}</h4>
                     <p className="text-[10px] text-white/60">{formatDate(userStories[activeUserIndex].stories[activeStoryIndex].created_at)}</p>
                   </div>
+                </div>
+
+                {/* Reactions Display */}
+                <div className="absolute bottom-24 left-4 right-4 flex flex-wrap gap-2 z-20">
+                  <AnimatePresence>
+                    {userStories[activeUserIndex].stories[activeStoryIndex].story_reactions?.map((reaction: any) => (
+                      <motion.div
+                        key={reaction.id}
+                        initial={{ opacity: 0, scale: 0, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0 }}
+                        className="flex items-center gap-1 bg-white/20 backdrop-blur-md px-2 py-1 rounded-full border border-white/30"
+                      >
+                        <span className="text-sm">{reaction.emoji}</span>
+                        <span className="text-[8px] font-bold text-white/80">@{reaction.profiles?.username}</span>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 </div>
 
                 {/* Delete Button (if own story) */}

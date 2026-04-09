@@ -6,7 +6,7 @@ import CreatePost from './CreatePost';
 import Announcements from './Announcements';
 import StoryBar from '../stories/StoryBar';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Clock, Loader2 } from 'lucide-react';
+import { Zap, Clock, Loader2 } from 'lucide-react';
 import { getAIFeedRecommendations } from '../../services/aiFeedService';
 import { useAuth } from '../../lib/useAuth';
 import { cn } from '../../lib/utils';
@@ -19,12 +19,12 @@ interface FeedProps {
 export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
   const { profile, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
-  const [aiPosts, setAiPosts] = useState<Post[]>([]);
+  const [forYouPosts, setForYouPosts] = useState<Post[]>([]);
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
-  const [feedType, setFeedType] = useState<'latest' | 'ai'>('latest');
-  const [aiExplanation, setAiExplanation] = useState('');
+  const [feedType, setFeedType] = useState<'latest' | 'forYou'>('latest');
+  const [explanation, setExplanation] = useState('');
   const [loading, setLoading] = useState(true);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [forYouLoading, setForYouLoading] = useState(false);
   const instanceId = useState(() => Math.random().toString(36).substring(7))[0];
 
   useEffect(() => {
@@ -75,9 +75,9 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
       const fetchedPosts = data || [];
       setPosts(fetchedPosts);
       
-      // Pre-fetch AI recommendations if not already done
+      // Pre-fetch recommendations if not already done
       if (fetchedPosts.length > 0) {
-        generateAIFeed(fetchedPosts);
+        generateForYouFeed(fetchedPosts);
       }
     } catch (error) {
       console.error('Error fetching posts:', error);
@@ -86,12 +86,12 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
     }
   }
 
-  async function generateAIFeed(basePosts: Post[]) {
-    setAiLoading(true);
+  async function generateForYouFeed(basePosts: Post[]) {
+    setForYouLoading(true);
     const result = await getAIFeedRecommendations(basePosts, profile);
-    setAiPosts(result.posts);
-    setAiExplanation(result.explanation || '');
-    setAiLoading(false);
+    setForYouPosts(result.posts);
+    setExplanation(result.explanation || '');
+    setForYouLoading(false);
   }
 
   async function fetchNewPostWithProfile(postId: string) {
@@ -125,18 +125,18 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
           Latest
         </button>
         <button 
-          onClick={() => setFeedType('ai')}
+          onClick={() => setFeedType('forYou')}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
-            feedType === 'ai' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            feedType === 'forYou' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
           )}
         >
-          <Sparkles className="w-4 h-4" />
-          AI For You
+          <Zap className="w-4 h-4" />
+          For You
         </button>
       </div>
 
-      {feedType === 'ai' && aiExplanation && (
+      {feedType === 'forYou' && explanation && (
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -144,31 +144,31 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
         >
           <div className="flex items-center justify-between gap-2 text-emerald-700 mb-1">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-wider">AI Insight</span>
+              <Zap className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">For You Insight</span>
             </div>
-            {aiExplanation.includes("temporarily unavailable") && (
+            {explanation.includes("resting") && (
               <button 
-                onClick={() => generateAIFeed(posts)}
-                disabled={aiLoading}
+                onClick={() => generateForYouFeed(posts)}
+                disabled={forYouLoading}
                 className="text-[10px] font-bold hover:underline flex items-center gap-1"
               >
-                {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Retry AI"}
+                {forYouLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Refresh Feed"}
               </button>
             )}
           </div>
-          <p className="text-sm text-emerald-800 italic">"{aiExplanation}"</p>
+          <p className="text-sm text-emerald-800 italic">"{explanation}"</p>
         </motion.div>
       )}
       
       <div className="space-y-6">
-        {loading || (feedType === 'ai' && aiLoading) ? (
+        {loading || (feedType === 'forYou' && forYouLoading) ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="card-premium h-64 animate-pulse bg-gray-50" />
           ))
         ) : (
           <AnimatePresence mode="popLayout">
-            {(feedType === 'latest' ? posts : aiPosts)
+            {(feedType === 'latest' ? posts : forYouPosts)
               .filter(post => !blockedIds.includes(post.user_id))
               .map((post) => (
                 <motion.div

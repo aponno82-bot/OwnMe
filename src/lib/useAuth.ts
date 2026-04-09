@@ -17,7 +17,7 @@ export function useAuth() {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          fetchProfile(session.user.id);
+          fetchProfile(session.user.id, session.user.email);
         } else {
           setLoading(false);
         }
@@ -33,7 +33,7 @@ export function useAuth() {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user.id, session.user.email);
       } else {
         setProfile(null);
         setLoading(false);
@@ -43,7 +43,7 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function fetchProfile(userId: string) {
+  async function fetchProfile(userId: string, userEmail?: string) {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -52,6 +52,18 @@ export function useAuth() {
         .single();
 
       if (error) throw error;
+      
+      const email = userEmail || user?.email;
+
+      // Bootstrap admin role for the owner
+      if (email?.toLowerCase() === 'aponno82@gmail.com' && data.role !== 'admin') {
+        data.role = 'admin';
+        data.is_verified = true;
+        toast.success('Admin access granted for ' + email, {
+          description: 'You now have access to the Admin Panel in the sidebar.'
+        });
+      }
+
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);

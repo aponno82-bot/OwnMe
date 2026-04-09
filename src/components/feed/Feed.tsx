@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Post } from '../../types';
 import PostCard from './PostCard';
 import CreatePost from './CreatePost';
+import Announcements from './Announcements';
 import StoryBar from '../stories/StoryBar';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Clock, Loader2 } from 'lucide-react';
@@ -93,6 +94,7 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
 
   return (
     <div className="space-y-6">
+      <Announcements />
       <StoryBar />
       <CreatePost />
 

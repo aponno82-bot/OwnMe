@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff } from 'lucide-react';
+import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Message, Profile } from '../../types';
@@ -11,9 +11,10 @@ import { sendBrowserNotification } from '../../lib/notifications';
 
 interface MessengerProps {
   initialContactId?: string | null;
+  onUserClick?: (userId: string) => void;
 }
 
-export default function Messenger({ initialContactId }: MessengerProps) {
+export default function Messenger({ initialContactId, onUserClick }: MessengerProps) {
   const { user, profile } = useAuth();
   const { isUserOnline } = usePresence();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -26,6 +27,8 @@ export default function Messenger({ initialContactId }: MessengerProps) {
   const [uploading, setUploading] = useState(false);
   const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
   const [incomingCall, setIncomingCall] = useState<{ from: Profile, type: 'audio' | 'video' } | null>(null);
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +90,16 @@ export default function Messenger({ initialContactId }: MessengerProps) {
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(event.target as Node)) {
+        setIsHeaderMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   async function fetchProfileForNotification(userId: string, content: string) {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -463,26 +476,31 @@ export default function Messenger({ initialContactId }: MessengerProps) {
         <div className="flex flex-col h-full relative">
           <div className="p-4 border-b border-gray-50 flex items-center justify-between bg-white/80 backdrop-blur-md shrink-0">
             <div className="flex items-center gap-3">
-              <button onClick={() => setActiveChat(null)} className="p-2 hover:bg-gray-50 rounded-full">
-                <MoreHorizontal className="w-5 h-5 rotate-90" />
+              <button onClick={() => setActiveChat(null)} className="p-2 hover:bg-gray-50 rounded-full text-gray-500 transition-colors">
+                <ChevronLeft className="w-6 h-6" />
               </button>
-              <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden border border-gray-100">
-                {activeChat.avatar_url ? (
-                  <img src={activeChat.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
-                    {activeChat.username[0].toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-900">{activeChat.full_name || activeChat.username}</h4>
-                <p className={cn(
-                  "text-[10px] font-bold uppercase tracking-wider",
-                  isUserOnline(activeChat.id) ? "text-emerald-500" : "text-gray-400"
-                )}>
-                  {isUserOnline(activeChat.id) ? 'Online' : 'Offline'}
-                </p>
+              <div 
+                className="flex items-center gap-3 cursor-pointer group"
+                onClick={() => onUserClick?.(activeChat.id)}
+              >
+                <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden border border-gray-100 group-hover:border-emerald-500 transition-all">
+                  {activeChat.avatar_url ? (
+                    <img src={activeChat.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
+                      {activeChat.username[0].toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">{activeChat.full_name || activeChat.username}</h4>
+                  <p className={cn(
+                    "text-[10px] font-bold uppercase tracking-wider",
+                    isUserOnline(activeChat.id) ? "text-emerald-500" : "text-gray-400"
+                  )}>
+                    {isUserOnline(activeChat.id) ? 'Online' : 'Offline'}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -493,9 +511,46 @@ export default function Messenger({ initialContactId }: MessengerProps) {
               <button onClick={() => startCall('video')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-xl transition-colors">
                 <Video className="w-5 h-5" />
               </button>
-              <button className="p-2 hover:bg-gray-50 text-gray-500 rounded-xl transition-colors">
-                <MoreHorizontal className="w-5 h-5" />
-              </button>
+              <div className="relative" ref={headerMenuRef}>
+                <button 
+                  onClick={() => setIsHeaderMenuOpen(!isHeaderMenuOpen)}
+                  className="p-2 hover:bg-gray-50 text-gray-500 rounded-xl transition-colors"
+                >
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+
+                <AnimatePresence>
+                  {isHeaderMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                      className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50"
+                    >
+                      <button 
+                        onClick={() => {
+                          toast.success('Chat muted');
+                          setIsHeaderMenuOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <VolumeX className="w-4 h-4" />
+                        Mute Notifications
+                      </button>
+                      <button 
+                        onClick={() => {
+                          toast.error('User blocked');
+                          setIsHeaderMenuOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                      >
+                        <ShieldAlert className="w-4 h-4" />
+                        Block User
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
 
@@ -613,16 +668,18 @@ export default function Messenger({ initialContactId }: MessengerProps) {
         <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Active Now</h3>
         <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
           {contacts.filter(c => isUserOnline(c.id)).map((contact) => (
-            <button
+            <div
               key={contact.id}
-              onClick={() => {
-                setActiveChat(contact);
-                fetchMessages(contact.id);
-              }}
-              className="flex flex-col items-center gap-2 flex-shrink-0 group"
+              className="flex flex-col items-center gap-2 flex-shrink-0 group cursor-pointer"
             >
               <div className="relative">
-                <div className="w-14 h-14 rounded-full bg-gray-100 p-0.5 border-2 border-emerald-500 group-hover:scale-105 transition-transform">
+                <div 
+                  className="w-14 h-14 rounded-full bg-gray-100 p-0.5 border-2 border-emerald-500 group-hover:scale-105 transition-transform overflow-hidden"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUserClick?.(contact.id);
+                  }}
+                >
                   <div className="w-full h-full rounded-full overflow-hidden">
                     {contact.avatar_url ? (
                       <img src={contact.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -633,8 +690,16 @@ export default function Messenger({ initialContactId }: MessengerProps) {
                 </div>
                 <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white bg-emerald-500" />
               </div>
-              <span className="text-[10px] font-bold text-gray-700 max-w-[60px] truncate">{contact.full_name?.split(' ')[0] || contact.username}</span>
-            </button>
+              <span 
+                className="text-[10px] font-bold text-gray-700 max-w-[60px] truncate hover:text-emerald-600 transition-colors"
+                onClick={() => {
+                  setActiveChat(contact);
+                  fetchMessages(contact.id);
+                }}
+              >
+                {contact.full_name?.split(' ')[0] || contact.username}
+              </span>
+            </div>
           ))}
           {contacts.filter(c => isUserOnline(c.id)).length === 0 && (
             <p className="text-xs text-gray-400 font-medium py-2">No active users</p>
@@ -662,16 +727,22 @@ export default function Messenger({ initialContactId }: MessengerProps) {
               c.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
             )
             .map((contact) => (
-            <button
+            <div
               key={contact.id}
+              className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-gray-50 transition-all group text-left cursor-pointer"
               onClick={() => {
                 setActiveChat(contact);
                 fetchMessages(contact.id);
               }}
-              className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-gray-50 transition-all group text-left"
             >
               <div className="relative flex-shrink-0">
-                <div className="w-11 h-11 rounded-full bg-gray-100 overflow-hidden border border-gray-100">
+                <div 
+                  className="w-11 h-11 rounded-full bg-gray-100 overflow-hidden border border-gray-100 hover:border-emerald-500 transition-all"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUserClick?.(contact.id);
+                  }}
+                >
                   {contact.avatar_url ? (
                     <img src={contact.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
@@ -692,7 +763,7 @@ export default function Messenger({ initialContactId }: MessengerProps) {
                 </div>
                 <p className="text-xs text-gray-500 truncate">Click to start chatting</p>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>

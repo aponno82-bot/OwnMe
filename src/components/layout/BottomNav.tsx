@@ -1,5 +1,6 @@
-import { Home, Compass, Bell, MessageSquare, User, PlayCircle } from 'lucide-react';
+import { Home, Compass, Bell, MessageSquare, User, PlayCircle, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../lib/useAuth';
 
 interface BottomNavProps {
   onNavigate: (page: any) => void;
@@ -7,6 +8,9 @@ interface BottomNavProps {
 }
 
 export default function BottomNav({ onNavigate, currentPage }: BottomNavProps) {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+
   const items = [
     { id: 'feed', icon: Home },
     { id: 'explore', icon: Compass },
@@ -14,6 +18,10 @@ export default function BottomNav({ onNavigate, currentPage }: BottomNavProps) {
     { id: 'messages', icon: MessageSquare },
     { id: 'profile', icon: User },
   ];
+
+  if (isAdmin) {
+    items.push({ id: 'admin', icon: Shield });
+  }
 
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-50 px-6 flex items-center justify-between">

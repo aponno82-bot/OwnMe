@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2, CheckCircle } from 'lucide-react';
 import { Post, Comment } from '../../types';
 import { formatDate, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -339,6 +339,73 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
     }
   };
 
+  const renderCommentThread = (parentId: string | null = null, depth = 0) => {
+    const threadComments = comments.filter(c => c.parent_id === parentId);
+    if (threadComments.length === 0) return null;
+
+    return (
+      <div className={cn("space-y-6", depth > 0 && "mt-4 ml-8 sm:ml-11 border-l-2 border-gray-100 pl-4 sm:pl-6")}>
+        {threadComments.map((comment) => (
+          <div key={comment.id} className="space-y-4">
+            <div className="flex gap-3">
+              <div className={cn(
+                "rounded-full bg-gray-100 overflow-hidden flex-shrink-0",
+                depth === 0 ? "w-8 h-8" : "w-6 h-6"
+              )}>
+                {comment.profiles?.avatar_url ? (
+                  <img src={comment.profiles.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className={cn(
+                    "w-full h-full flex items-center justify-center text-gray-400 font-bold",
+                    depth === 0 ? "text-xs" : "text-[10px]"
+                  )}>
+                    {comment.profiles?.username?.[0]?.toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <div className={cn(
+                  "rounded-2xl px-4 py-2",
+                  depth === 0 ? "bg-gray-50" : "bg-gray-50/50"
+                )}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={cn(
+                      "font-bold text-gray-900 flex items-center gap-1",
+                      depth === 0 ? "text-xs" : "text-[11px]"
+                    )}>
+                      {comment.profiles?.full_name || comment.profiles?.username}
+                      {comment.profiles?.is_verified && (
+                        <CheckCircle className="w-3 h-3 text-blue-500 fill-current" />
+                      )}
+                    </span>
+                    <span className="text-[10px] text-gray-400">{formatDate(comment.created_at)}</span>
+                  </div>
+                  <p className={cn(
+                    "text-gray-700",
+                    depth === 0 ? "text-sm" : "text-xs"
+                  )}>
+                    {comment.text}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 mt-1 ml-2">
+                  <button 
+                    onClick={() => setReplyingTo(comment)}
+                    className="text-[10px] font-bold text-gray-400 hover:text-emerald-500 transition-colors"
+                  >
+                    Reply
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Recursive call for replies */}
+            {renderCommentThread(comment.id, depth + 1)}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="card-premium p-6">
       {/* Header */}
@@ -358,9 +425,14 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
           </div>
           <div>
             <div className="flex items-center gap-1 flex-wrap">
-              <h3 className="font-bold text-gray-900 hover:text-emerald-600 transition-colors cursor-pointer">
-                {post.profiles?.full_name || post.profiles?.username}
-              </h3>
+              <div className="flex items-center gap-1">
+                <h3 className="font-bold text-gray-900 hover:text-emerald-600 transition-colors cursor-pointer">
+                  {post.profiles?.full_name || post.profiles?.username}
+                </h3>
+                {post.profiles?.is_verified && (
+                  <CheckCircle className="w-3.5 h-3.5 text-blue-500 fill-current" />
+                )}
+              </div>
               {post.feeling && (
                 <span className="text-xs text-gray-500">
                   is feeling <span className="font-bold text-gray-700">{post.feeling}</span>
@@ -652,63 +724,10 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="mt-6 pt-6 border-t border-gray-50 space-y-6">
-              {comments.filter(c => !c.parent_id).map((comment) => (
-                <div key={comment.id} className="space-y-4">
-                  <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
-                      {comment.profiles?.avatar_url ? (
-                        <img src={comment.profiles.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold">
-                          {comment.profiles?.username?.[0]?.toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="bg-gray-50 rounded-2xl px-4 py-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-bold text-gray-900">{comment.profiles?.full_name || comment.profiles?.username}</span>
-                          <span className="text-[10px] text-gray-400">{formatDate(comment.created_at)}</span>
-                        </div>
-                        <p className="text-sm text-gray-700">{comment.text}</p>
-                      </div>
-                      <div className="flex items-center gap-4 mt-1 ml-2">
-                        <button 
-                          onClick={() => setReplyingTo(comment)}
-                          className="text-[10px] font-bold text-gray-400 hover:text-emerald-500 transition-colors"
-                        >
-                          Reply
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+            <div className="mt-6 pt-6 border-t border-gray-50">
+              {renderCommentThread(null)}
 
-                  {/* Replies */}
-                  {comments.filter(c => c.parent_id === comment.id).map((reply) => (
-                    <div key={reply.id} className="flex gap-3 ml-11">
-                      <div className="w-6 h-6 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
-                        {reply.profiles?.avatar_url ? (
-                          <img src={reply.profiles.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-[8px] font-bold">
-                            {reply.profiles?.username?.[0]?.toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 bg-gray-50/50 rounded-2xl px-4 py-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-bold text-gray-900">{reply.profiles?.full_name || reply.profiles?.username}</span>
-                          <span className="text-[9px] text-gray-400">{formatDate(reply.created_at)}</span>
-                        </div>
-                        <p className="text-xs text-gray-700">{reply.text}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-
-              <form onSubmit={handleAddComment} className="flex flex-col gap-2 pt-2">
+              <form onSubmit={handleAddComment} className="flex flex-col gap-2 pt-4">
                 {replyingTo && (
                   <div className="flex items-center justify-between px-3 py-1 bg-emerald-50 rounded-lg">
                     <span className="text-[10px] font-bold text-emerald-600">

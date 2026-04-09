@@ -1,5 +1,6 @@
-import { Home, Compass, Bell, MessageSquare, Users, Flag, Calendar, Settings, User, PlayCircle } from 'lucide-react';
+import { Home, Compass, Bell, MessageSquare, Users, Flag, Calendar, Settings, User, PlayCircle, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../lib/useAuth';
 
 interface SidebarProps {
   onNavigate: (page: any) => void;
@@ -7,6 +8,9 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+
   const menuItems = [
     { id: 'feed', label: 'News Feed', icon: Home },
     { id: 'explore', label: 'Explore', icon: Compass },
@@ -15,6 +19,10 @@ export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
     { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'profile', label: 'My Profile', icon: User },
   ];
+
+  if (isAdmin) {
+    menuItems.push({ id: 'admin', label: 'Admin Panel', icon: Shield });
+  }
 
   const communityItems = [
     { id: 'groups', label: 'Groups', icon: Users },

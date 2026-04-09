@@ -14,6 +14,7 @@ import SuggestedUsers from './components/explore/SuggestedUsers';
 import Groups from './components/groups/Groups';
 import Reels from './components/reels/Reels';
 import Settings from './components/settings/Settings';
+import AdminPanel from './components/admin/AdminPanel';
 import TrendingHashtags from './components/explore/TrendingHashtags';
 import HashtagFeed from './components/explore/HashtagFeed';
 import { Users, Calendar } from 'lucide-react';
@@ -21,7 +22,7 @@ import { requestNotificationPermission } from './lib/notifications';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
-  const [currentPage, setCurrentPage] = useState<'feed' | 'profile' | 'explore' | 'notifications' | 'messages' | 'reels' | 'hashtag' | 'groups' | 'events' | 'settings'>('feed');
+  const [currentPage, setCurrentPage] = useState<'feed' | 'profile' | 'explore' | 'notifications' | 'messages' | 'reels' | 'hashtag' | 'groups' | 'events' | 'settings' | 'admin'>('feed');
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
   const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
@@ -101,7 +102,10 @@ export default function App() {
             )}
             {currentPage === 'messages' && (
               <div className="fixed inset-0 top-[72px] bottom-[80px] lg:static lg:h-[calc(100vh-120px)] z-40 bg-white">
-                <Messenger initialContactId={activeChatUserId} />
+                <Messenger 
+                  initialContactId={activeChatUserId} 
+                  onUserClick={(id) => handleNavigate('profile', id)}
+                />
               </div>
             )}
             {currentPage === 'explore' && (
@@ -113,6 +117,7 @@ export default function App() {
             {currentPage === 'notifications' && <NotificationCenter onUserClick={(id) => handleNavigate('profile', id)} />}
             {currentPage === 'groups' && <Groups />}
             {currentPage === 'settings' && <Settings />}
+            {currentPage === 'admin' && <AdminPanel />}
             {currentPage === 'events' && (
               <div className="card-premium p-12 text-center">
                 <Calendar className="w-12 h-12 text-emerald-500 mx-auto mb-4" />

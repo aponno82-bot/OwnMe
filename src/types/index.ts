@@ -9,6 +9,8 @@ export interface Profile {
   address: string | null;
   school: string | null;
   updated_at?: string;
+  is_verified?: boolean;
+  role?: 'admin' | 'user';
 }
 
 export interface Post {
@@ -97,9 +99,31 @@ export interface Notification {
   id: string;
   user_id: string;
   actor_id: string;
-  type: 'like' | 'comment' | 'follow' | 'message';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'announcement';
   post_id?: string;
   is_read: boolean;
   created_at: string;
   profiles?: Profile;
+}
+
+export interface Report {
+  id: string;
+  reporter_id: string;
+  target_id: string;
+  target_type: 'user' | 'post' | 'comment';
+  reason: string;
+  status: 'pending' | 'resolved' | 'dismissed';
+  created_at: string;
+  reporter?: Profile;
+  target_user?: Profile;
+  target_post?: Post;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  created_by: string;
+  created_at: string;
+  target_role?: 'all' | 'admin' | 'user';
 }

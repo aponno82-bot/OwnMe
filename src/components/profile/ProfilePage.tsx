@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Post, Profile } from '../../types';
 import PostCard from '../feed/PostCard';
-import { Edit3, MapPin, Link as LinkIcon, Calendar, Grid, List, Heart, X, Camera, MessageCircle, MoreHorizontal, ShieldAlert, Flag, Copy, Loader2, Shield } from 'lucide-react';
+import { Edit3, MapPin, Link as LinkIcon, Calendar, Grid, List, Heart, X, Camera, MessageCircle, MoreHorizontal, ShieldAlert, Flag, Copy, Loader2, Shield, CheckCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -329,7 +329,12 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
             <div className="flex-1">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{profile?.full_name || profile?.username}</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{profile?.full_name || profile?.username}</h1>
+                    {profile?.is_verified && (
+                      <CheckCircle className="w-6 h-6 sm:w-7 sm:h-7 text-blue-500 fill-current" />
+                    )}
+                  </div>
                   <p className="text-gray-500 font-medium">@{profile?.username}</p>
                 </div>
                 <div className="flex gap-3">

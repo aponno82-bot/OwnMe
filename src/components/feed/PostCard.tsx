@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2, CheckCircle } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2 } from 'lucide-react';
+import VerificationBadge from '../VerificationBadge';
 import { Post, Comment } from '../../types';
 import { formatDate, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -385,7 +386,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                     )}>
                       {comment.profiles?.full_name || comment.profiles?.username}
                       {comment.profiles?.is_verified && (
-                        <CheckCircle className="w-3 h-3 text-blue-500 fill-current shadow-sm" />
+                        <VerificationBadge size="sm" />
                       )}
                     </span>
                     <span className="text-[10px] text-gray-400">{formatDate(comment.created_at)}</span>
@@ -440,7 +441,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                   {post.profiles?.full_name || post.profiles?.username}
                 </h3>
                 {post.profiles?.is_verified && (
-                  <CheckCircle className="w-4 h-4 text-blue-500 fill-current shadow-sm" />
+                  <VerificationBadge size="md" />
                 )}
               </div>
               {post.feeling && (

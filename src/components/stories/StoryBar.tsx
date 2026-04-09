@@ -27,8 +27,11 @@ export default function StoryBar() {
   const instanceId = useState(() => Math.random().toString(36).substring(7))[0];
 
   useEffect(() => {
-    fetchBlockedIds();
     fetchStories();
+  }, [blockedIds]);
+
+  useEffect(() => {
+    fetchBlockedIds();
 
     const storiesChannel = supabase
       .channel(`public:stories:${instanceId}`)

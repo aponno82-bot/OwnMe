@@ -6,6 +6,7 @@ import { Message, Profile } from '../../types';
 import { toast } from 'sonner';
 import { usePresence } from '../../lib/usePresence';
 import { cn, formatDate } from '../../lib/utils';
+import VerificationBadge from '../VerificationBadge';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendBrowserNotification } from '../../lib/notifications';
 
@@ -521,7 +522,10 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                   )}
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">{activeChat.full_name || activeChat.username}</h4>
+                  <h4 className="text-sm font-bold text-gray-900 group-hover:text-emerald-600 transition-colors flex items-center gap-1">
+                    {activeChat.full_name || activeChat.username}
+                    {activeChat.is_verified && <VerificationBadge size="sm" />}
+                  </h4>
                   <p className={cn(
                     "text-[10px] font-bold uppercase tracking-wider",
                     isUserOnline(activeChat.id) ? "text-emerald-500" : "text-gray-400"
@@ -798,15 +802,18 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                   isUserOnline(contact.id) ? "bg-emerald-500" : "bg-gray-300"
                 )} />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-emerald-600 transition-colors">{contact.full_name || contact.username}</h4>
-                  <span className="text-[10px] text-gray-400 font-medium">
-                    {isUserOnline(contact.id) ? 'Active' : 'Away'}
-                  </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-emerald-600 transition-colors flex items-center gap-1">
+                      {contact.full_name || contact.username}
+                      {contact.is_verified && <VerificationBadge size="sm" />}
+                    </h4>
+                    <span className="text-[10px] text-gray-400 font-medium">
+                      {isUserOnline(contact.id) ? 'Active' : 'Away'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 truncate">Click to start chatting</p>
                 </div>
-                <p className="text-xs text-gray-500 truncate">Click to start chatting</p>
-              </div>
             </div>
           ))}
         </div>

@@ -6,18 +6,17 @@ import {
   Users, 
   Flag, 
   Megaphone, 
-  CheckCircle, 
   XCircle, 
   Search, 
   MoreHorizontal, 
   Trash2, 
   AlertTriangle,
   Loader2,
-  ExternalLink,
+  Plus,
   UserCheck,
-  UserX,
-  Plus
+  UserX
 } from 'lucide-react';
+import VerificationBadge from '../VerificationBadge';
 import { cn, formatDate } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -106,7 +105,6 @@ export default function AdminPanel() {
   };
 
   const deleteAnnouncement = async (id: string) => {
-    if (!window.confirm('Delete this announcement?')) return;
     try {
       const { error } = await supabase
         .from('announcements')
@@ -246,7 +244,7 @@ export default function AdminPanel() {
                               <div>
                                 <div className="flex items-center gap-1">
                                   <span className="text-sm font-bold text-gray-900">{u.full_name || u.username}</span>
-                                  {u.is_verified && <CheckCircle className="w-3.5 h-3.5 text-blue-500 fill-current" />}
+                                  {u.is_verified && <VerificationBadge size="sm" />}
                                 </div>
                                 <span className="text-xs text-gray-500">@{u.username}</span>
                               </div>

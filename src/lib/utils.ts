@@ -7,9 +7,12 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(date: string | Date) {
   const d = new Date(date);
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
   });
 }

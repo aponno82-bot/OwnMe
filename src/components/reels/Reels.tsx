@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Post } from '../../types';
-import { Heart, MessageCircle, Share2, Music2, User as UserIcon, Loader2, ChevronUp, ChevronDown, Video, X, Send, Flag, CheckCircle } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music2, User as UserIcon, Loader2, ChevronUp, ChevronDown, Video, X, Send, Flag } from 'lucide-react';
+import VerificationBadge from '../VerificationBadge';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../lib/useAuth';
 import { useConnections } from '../../lib/useConnections';
@@ -238,7 +239,7 @@ function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
                 @{reel.profiles?.username}
               </h3>
               {reel.profiles?.is_verified && (
-                <CheckCircle className="w-4 h-4 text-blue-500 fill-current shadow-sm" />
+                <VerificationBadge size="md" />
               )}
             </div>
             {user?.id !== reel.user_id && (
@@ -307,7 +308,7 @@ function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
                         <div className="flex items-center gap-1 mb-1">
                           <span className="text-xs font-bold text-gray-900">{comment.profiles?.username}</span>
                           {comment.profiles?.is_verified && (
-                            <CheckCircle className="w-3 h-3 text-blue-500 fill-current shadow-sm" />
+                            <VerificationBadge size="sm" />
                           )}
                         </div>
                         <p className="text-sm text-gray-700">{comment.text}</p>

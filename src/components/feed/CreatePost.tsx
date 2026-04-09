@@ -173,9 +173,9 @@ export default function CreatePost() {
   };
 
   return (
-    <div className="card-premium p-6">
+    <div className="card-premium p-4 sm:p-6 mb-6">
       <div className="flex gap-4">
-        <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-50">
+        <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 shadow-sm">
           {profile?.avatar_url ? (
             <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           ) : (
@@ -185,12 +185,12 @@ export default function CreatePost() {
           )}
         </div>
         <form onSubmit={handleSubmit} className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <div className="relative">
               <button 
                 type="button"
                 onClick={() => setIsPrivacyOpen(!isPrivacyOpen)}
-                className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 hover:bg-gray-100 rounded-lg text-[10px] font-bold text-gray-500 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] font-bold text-gray-500 transition-all active:scale-95"
               >
                 {privacy === 'public' && <Globe className="w-3 h-3" />}
                 {privacy === 'friends' && <Users className="w-3 h-3" />}
@@ -254,7 +254,7 @@ export default function CreatePost() {
             placeholder={`What's on your mind, ${profile?.full_name?.split(' ')[0] || 'friend'}?`}
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full bg-transparent border-none focus:ring-0 text-lg placeholder:text-gray-400 resize-none min-h-[80px] outline-none"
+            className="w-full bg-transparent border-none focus:ring-0 text-lg placeholder:text-gray-400 resize-none min-h-[100px] outline-none font-medium"
           />
 
           {mediaUrl && (

@@ -449,7 +449,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
 
   if (activeChat) {
     return (
-      <div className="flex flex-col h-full bg-white rounded-[24px] overflow-hidden border border-gray-100 shadow-sm relative">
+      <div className="flex flex-col h-full bg-white lg:rounded-[32px] overflow-hidden border border-gray-100 shadow-premium relative">
         {/* Call UI Overlays */}
         <AnimatePresence>
           {(isCalling || incomingCall) && (
@@ -512,7 +512,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         </AnimatePresence>
 
         <div className="flex flex-col h-full relative">
-          <div className="p-4 border-b border-gray-50 flex items-center justify-between bg-white/80 backdrop-blur-md shrink-0">
+          <div className="p-4 border-b border-gray-50 flex items-center justify-between glass sticky top-0 z-10">
             <div className="flex items-center gap-3">
               <button onClick={() => setActiveChat(null)} className="p-2 hover:bg-gray-50 rounded-full text-gray-500 transition-colors">
                 <ChevronLeft className="w-6 h-6" />
@@ -641,7 +641,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
           </div>
 
           {!isBlocked && !isBlockingMe && (
-            <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-50 bg-white shrink-0">
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-50 glass shrink-0">
             <div className="flex items-center gap-2">
               {isRecording ? (
                 <div className="flex-1 flex items-center gap-4 px-4 py-2 bg-rose-50 rounded-2xl">
@@ -662,7 +662,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                   <button 
                     type="button" 
                     onClick={stopRecording}
-                    className="p-2 bg-rose-500 text-white rounded-xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20"
+                    className="p-3 bg-rose-500 text-white rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95"
                   >
                     <Send className="w-5 h-5" />
                   </button>
@@ -672,7 +672,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                   <button 
                     type="button" 
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2 hover:bg-gray-50 text-gray-400 rounded-xl transition-colors"
+                    className="p-3 hover:bg-gray-50 text-gray-400 rounded-2xl transition-all active:scale-90"
                   >
                     <Paperclip className="w-5 h-5" />
                   </button>
@@ -688,16 +688,16 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                       placeholder="Type a message..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      className="w-full pl-4 pr-10 py-3 bg-gray-50 border-none rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      className="w-full pl-6 pr-12 py-4 bg-gray-50 border-none rounded-[24px] text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                     />
-                    <button type="submit" disabled={!newMessage.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-colors disabled:opacity-50">
+                    <button type="submit" disabled={!newMessage.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 text-emerald-500 hover:bg-emerald-50 rounded-2xl transition-all disabled:opacity-50 active:scale-90">
                       <Send className="w-5 h-5" />
                     </button>
                   </div>
                   <button 
                     type="button" 
                     onClick={startRecording}
-                    className="p-2 hover:bg-gray-50 text-gray-400 rounded-xl transition-colors"
+                    className="p-3 hover:bg-gray-50 text-gray-400 rounded-2xl transition-all active:scale-90"
                   >
                     <Mic className="w-5 h-5" />
                   </button>

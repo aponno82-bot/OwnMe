@@ -53,8 +53,6 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
   const handleDelete = async () => {
     if (!user || user.id !== post.user_id) return;
     
-    if (!window.confirm('Are you sure you want to delete this post?')) return;
-
     setIsDeleting(true);
     try {
       const { error } = await supabase
@@ -64,11 +62,14 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
 
       if (error) throw error;
       toast.success('Post deleted');
+      setShowDeleteConfirm(false);
     } catch (error: any) {
       toast.error(error.message);
       setIsDeleting(false);
     }
   };
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleUpdatePost = async () => {
     if (!user || user.id !== post.user_id) return;
@@ -523,7 +524,42 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
   };
 
   return (
-    <div className="card-premium p-6">
+    <div className="card-premium p-4 sm:p-6">
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-sm rounded-[32px] p-8 text-center shadow-2xl"
+            >
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 className="w-8 h-8 text-rose-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Post?</h3>
+              <p className="text-gray-500 mb-8">This action cannot be undone. Are you sure you want to remove this post?</p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-full transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div 
@@ -621,7 +657,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                       Edit Post
                     </button>
                     <button 
-                      onClick={handleDelete}
+                      onClick={() => setShowDeleteConfirm(true)}
                       disabled={isDeleting}
                       className="w-full px-4 py-2 text-left text-sm font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
                     >

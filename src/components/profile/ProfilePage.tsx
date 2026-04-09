@@ -32,6 +32,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
   const [isBlocked, setIsBlocked] = useState(false);
   const [isBlockingMe, setIsBlockingMe] = useState(false);
   const [showConnectionsModal, setShowConnectionsModal] = useState<'followers' | 'following' | null>(null);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [connectionsList, setConnectionsList] = useState<Profile[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
   const instanceId = useState(() => Math.random().toString(36).substring(7))[0];
@@ -143,8 +144,10 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
         setIsBlocked(false);
         toast.success('User unblocked');
       } else {
-        const confirmed = window.confirm('Block this user? They will not be able to see your posts or message you.');
-        if (!confirmed) return;
+        if (!showBlockConfirm) {
+          setShowBlockConfirm(true);
+          return;
+        }
 
         const { error } = await supabase
           .from('blocks')
@@ -154,6 +157,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
           });
         if (error) throw error;
         setIsBlocked(true);
+        setShowBlockConfirm(false);
         toast.success('User blocked');
         setIsMenuOpen(false);
       }
@@ -700,120 +704,6 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
         )}
       </AnimatePresence>
 
-      {/* Edit Modal */}
-      <AnimatePresence>
-        {isEditModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsEditModalOpen(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl overflow-hidden"
-            >
-              <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-                <h2 className="text-xl font-bold">Edit Profile</h2>
-                <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-50 rounded-full">
-                  <X className="w-5 h-5 text-gray-400" />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateProfile} className="p-6 space-y-4">
-                <div className="flex justify-center mb-6">
-                  <div className="relative group">
-                    <div className="w-24 h-24 rounded-[24px] bg-gray-100 overflow-hidden">
-                      {editForm.avatar_url ? (
-                        <img src={editForm.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400"><Camera className="w-8 h-8" /></div>
-                      )}
-                    </div>
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-[24px] cursor-pointer">
-                      <Camera className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Full Name</label>
-                    <input 
-                      type="text" 
-                      value={editForm.full_name}
-                      onChange={(e) => setEditForm({...editForm, full_name: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Username</label>
-                    <input 
-                      type="text" 
-                      value={editForm.username}
-                      onChange={(e) => setEditForm({...editForm, username: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bio</label>
-                  <textarea 
-                    value={editForm.bio}
-                    onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
-                    rows={3}
-                    className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Workplace</label>
-                    <input 
-                      type="text" 
-                      value={editForm.workplace}
-                      onChange={(e) => setEditForm({...editForm, workplace: e.target.value})}
-                      placeholder="Where do you work?"
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">School</label>
-                    <input 
-                      type="text" 
-                      value={editForm.school}
-                      onChange={(e) => setEditForm({...editForm, school: e.target.value})}
-                      placeholder="Where did you study?"
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Address</label>
-                  <input 
-                    type="text" 
-                    value={editForm.address}
-                    onChange={(e) => setEditForm({...editForm, address: e.target.value})}
-                    placeholder="Where do you live?"
-                    className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  />
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                  <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 btn-secondary py-3">Cancel</button>
-                  <button type="submit" className="flex-1 btn-primary py-3">Save Changes</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Content Grid */}
       {!isBlocked && !isBlockingMe && (
@@ -961,7 +851,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                       type="text" 
                       value={editForm.full_name}
                       onChange={(e) => setEditForm({...editForm, full_name: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      className="input-premium"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -970,7 +860,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                       type="text" 
                       value={editForm.username}
                       onChange={(e) => setEditForm({...editForm, username: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      className="input-premium"
                     />
                   </div>
                 </div>
@@ -981,7 +871,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                     value={editForm.bio}
                     onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
                     rows={3}
-                    className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+                    className="input-premium resize-none"
                   />
                 </div>
 
@@ -993,7 +883,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                       value={editForm.workplace}
                       onChange={(e) => setEditForm({...editForm, workplace: e.target.value})}
                       placeholder="Where do you work?"
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      className="input-premium"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1003,7 +893,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                       value={editForm.school}
                       onChange={(e) => setEditForm({...editForm, school: e.target.value})}
                       placeholder="Where did you study?"
-                      className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      className="input-premium"
                     />
                   </div>
                 </div>
@@ -1015,7 +905,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                     value={editForm.address}
                     onChange={(e) => setEditForm({...editForm, address: e.target.value})}
                     placeholder="Where do you live?"
-                    className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="input-premium"
                   />
                 </div>
 

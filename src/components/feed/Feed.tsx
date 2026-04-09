@@ -121,13 +121,12 @@ export default function Feed({ onUserClick, onHashtagClick, highlightPostId }: F
       <StoryBar />
       <CreatePost />
 
-      {/* Feed Tabs */}
-      <div className="flex gap-4 p-1 bg-gray-100 rounded-2xl w-fit">
+      <div className="flex gap-2 p-1.5 bg-gray-100/50 backdrop-blur-sm rounded-[24px] w-fit border border-gray-100">
         <button 
           onClick={() => setFeedType('latest')}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
-            feedType === 'latest' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            "flex items-center gap-2 px-6 py-2.5 rounded-[20px] text-sm font-bold transition-all active:scale-95",
+            feedType === 'latest' ? "bg-white text-emerald-600 shadow-premium" : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
           )}
         >
           <Clock className="w-4 h-4" />
@@ -136,8 +135,8 @@ export default function Feed({ onUserClick, onHashtagClick, highlightPostId }: F
         <button 
           onClick={() => setFeedType('forYou')}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
-            feedType === 'forYou' ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            "flex items-center gap-2 px-6 py-2.5 rounded-[20px] text-sm font-bold transition-all active:scale-95",
+            feedType === 'forYou' ? "bg-white text-emerald-600 shadow-premium" : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
           )}
         >
           <Zap className="w-4 h-4" />

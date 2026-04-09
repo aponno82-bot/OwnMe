@@ -12,27 +12,27 @@ export default function Navbar({ onNavigate, currentPage }: NavbarProps) {
   const { profile } = useAuth();
 
   return (
-    <nav className="fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 z-50">
+    <nav className="fixed top-0 left-0 right-0 h-16 glass z-50">
       <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Logo */}
         <div 
-          className="flex items-center gap-2 cursor-pointer"
+          className="flex items-center gap-2 cursor-pointer group"
           onClick={() => onNavigate('feed')}
         >
-          <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-all group-active:scale-90">
             <span className="text-white font-bold text-xl">O</span>
           </div>
-          <span className="text-xl font-bold tracking-tight hidden sm:block">OwnMe</span>
+          <span className="text-xl font-bold tracking-tight hidden sm:block group-hover:text-emerald-600 transition-colors">OwnMe</span>
         </div>
 
         {/* Search */}
         <div className="hidden md:flex flex-1 max-w-md mx-8">
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               placeholder="Search people, groups, events..."
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-full text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
+              className="w-full pl-12 pr-4 py-2.5 bg-gray-50 border-none rounded-full text-sm focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none focus:bg-white"
             />
           </div>
         </div>

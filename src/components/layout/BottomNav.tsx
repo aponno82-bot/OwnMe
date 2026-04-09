@@ -24,14 +24,14 @@ export default function BottomNav({ onNavigate, currentPage }: BottomNavProps) {
   }
 
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-xl border-t border-gray-100 z-50 px-6 flex items-center justify-between">
+    <div className="lg:hidden fixed bottom-6 left-6 right-6 h-20 glass rounded-[32px] z-50 px-6 flex items-center justify-between shadow-2xl">
       {items.map((item) => (
         <button
           key={item.id}
           onClick={() => onNavigate(item.id)}
           className={cn(
             "p-3 rounded-2xl transition-all active:scale-90",
-            currentPage === item.id ? "text-emerald-500 bg-emerald-50" : "text-gray-400"
+            currentPage === item.id ? "text-emerald-500 bg-emerald-50 shadow-sm" : "text-gray-400 hover:bg-gray-50"
           )}
         >
           <item.icon className="w-6 h-6" />

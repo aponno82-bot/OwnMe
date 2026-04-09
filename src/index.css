@@ -8,34 +8,47 @@
   --color-primary-dark: #059669;
   --color-background: #FFFFFF;
   --color-surface: #F9FAFB;
-  --color-border: #E5E7EB;
+  --color-border: #F3F4F6;
   
   --radius-xl: 20px;
   --radius-2xl: 24px;
+  --radius-3xl: 32px;
+  
+  --shadow-premium: 0 8px 30px rgba(0, 0, 0, 0.04);
+  --shadow-premium-hover: 0 20px 40px rgba(0, 0, 0, 0.08);
 }
 
 @layer base {
   body {
-    @apply bg-white text-gray-900 antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    @apply bg-white text-gray-900 antialiased selection:bg-emerald-100 selection:text-emerald-900;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
 @layer components {
   .glass {
-    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-sm;
+  }
+  
+  .glass-dark {
+    @apply bg-black/70 backdrop-blur-xl border border-white/10 shadow-xl;
   }
   
   .card-premium {
-    @apply bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)];
+    @apply bg-white rounded-[32px] border border-gray-100/50 shadow-premium transition-all duration-500 hover:shadow-premium-hover;
   }
   
   .btn-primary {
-    @apply bg-emerald-500 hover:bg-emerald-600 text-white font-medium px-6 py-2.5 rounded-full transition-all active:scale-95 disabled:opacity-50;
+    @apply bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 py-3 rounded-full transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40;
   }
   
   .btn-secondary {
-    @apply bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium px-6 py-2.5 rounded-full transition-all active:scale-95;
+    @apply bg-gray-50 hover:bg-gray-100 text-gray-900 font-bold px-8 py-3 rounded-full transition-all active:scale-95 border border-gray-100;
+  }
+
+  .input-premium {
+    @apply w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none focus:border-emerald-500/20 focus:bg-white transition-all text-sm font-medium placeholder:text-gray-400;
   }
 }
 

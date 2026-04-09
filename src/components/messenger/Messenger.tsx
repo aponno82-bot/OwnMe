@@ -9,6 +9,7 @@ import { cn, formatDate } from '../../lib/utils';
 import VerificationBadge from '../VerificationBadge';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendBrowserNotification } from '../../lib/notifications';
+import { createNotification } from '../../services/notificationService';
 
 interface MessengerProps {
   initialContactId?: string | null;
@@ -354,6 +355,11 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     } else {
       setMessages(prev => [...prev, data]);
       setNewMessage('');
+      
+      // Send notification
+      if (activeChat) {
+        await createNotification(activeChat.id, user.id, 'message');
+      }
     }
   };
 
@@ -374,6 +380,9 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       media_type: 'call',
       media_url: type
     });
+
+    // Send notification
+    await createNotification(activeChat.id, user.id, 'message', undefined, { title: 'Incoming Call', body: `${user.id} is calling you...` });
   };
 
   const acceptCall = () => {

@@ -47,6 +47,7 @@ export interface Comment {
   created_at: string;
   profiles?: Profile;
   parent_id?: string | null;
+  reactions_count?: number;
 }
 
 export interface Connection {

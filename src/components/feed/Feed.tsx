@@ -14,9 +14,10 @@ import { cn } from '../../lib/utils';
 interface FeedProps {
   onUserClick: (userId: string) => void;
   onHashtagClick: (hashtag: string) => void;
+  highlightPostId?: string | null;
 }
 
-export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
+export default function Feed({ onUserClick, onHashtagClick, highlightPostId }: FeedProps) {
   const { profile, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [forYouPosts, setForYouPosts] = useState<Post[]>([]);
@@ -94,6 +95,14 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
     setForYouLoading(false);
   }
 
+  useEffect(() => {
+    if (highlightPostId) {
+      const element = document.getElementById(`post-${highlightPostId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [highlightPostId, posts, forYouPosts]);
   async function fetchNewPostWithProfile(postId: string) {
     const { data } = await supabase
       .from('posts')
@@ -173,6 +182,7 @@ export default function Feed({ onUserClick, onHashtagClick }: FeedProps) {
               .map((post) => (
                 <motion.div
                   key={post.id}
+                  id={`post-${post.id}`}
                   initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}

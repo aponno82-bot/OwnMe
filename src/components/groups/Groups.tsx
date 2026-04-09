@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Group, Profile } from '../../types';
 import { useAuth } from '../../lib/useAuth';
@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 export default function Groups() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [myGroups, setMyGroups] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +24,75 @@ export default function Groups() {
   const [groupPosts, setGroupPosts] = useState<any[]>([]);
   const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [groupPostContent, setGroupPostContent] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedGroup || !user) return;
+
+    setUploadingCover(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${selectedGroup.id}-${Math.random()}.${fileExt}`;
+      const filePath = `group-covers/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('media')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('media')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('groups')
+        .update({ cover_url: publicUrl })
+        .eq('id', selectedGroup.id);
+
+      if (updateError) throw updateError;
+
+      setSelectedGroup({ ...selectedGroup, cover_url: publicUrl });
+      toast.success('Group cover updated!');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const handleCreateGroupPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGroup || !user || !groupPostContent.trim()) return;
+
+    setIsPosting(true);
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          user_id: user.id,
+          group_id: selectedGroup.id,
+          content: groupPostContent.trim(),
+          privacy: 'public' // Group posts are public within the group
+        })
+        .select('*, profiles(*)')
+        .single();
+
+      if (error) throw error;
+
+      setGroupPosts([data, ...groupPosts]);
+      setGroupPostContent('');
+      toast.success('Post shared to group!');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   useEffect(() => {
     fetchGroups();
@@ -188,9 +257,22 @@ export default function Groups() {
               <div className="w-full h-full bg-gradient-to-r from-emerald-400 to-teal-500" />
             )}
             {isAdmin(selectedGroup.id) && (
-              <button className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-xl text-gray-700 hover:bg-white transition-all shadow-sm opacity-0 group-hover:opacity-100">
-                <Settings className="w-5 h-5" />
-              </button>
+              <>
+                <input 
+                  type="file" 
+                  ref={coverInputRef} 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={handleCoverUpload}
+                />
+                <button 
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={uploadingCover}
+                  className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-xl text-gray-700 hover:bg-white transition-all shadow-sm opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                >
+                  {uploadingCover ? <Plus className="w-5 h-5 animate-spin" /> : <Settings className="w-5 h-5" />}
+                </button>
+              </>
             )}
           </div>
 
@@ -247,15 +329,33 @@ export default function Groups() {
           <div className="space-y-6">
             <div className="card-premium p-4">
               <h3 className="text-sm font-bold mb-4">Post to Group</h3>
-              {/* Simplified post input for now */}
-              <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0" />
-                <input 
-                  type="text" 
-                  placeholder={`Write something to ${selectedGroup.name}...`}
-                  className="flex-1 bg-gray-50 border-none rounded-xl px-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
-                />
-              </div>
+              <form onSubmit={handleCreateGroupPost} className="flex gap-3">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex-shrink-0 overflow-hidden">
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-emerald-500 font-bold">
+                      {profile?.username?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 flex gap-2">
+                  <input 
+                    type="text" 
+                    value={groupPostContent}
+                    onChange={(e) => setGroupPostContent(e.target.value)}
+                    placeholder={`Write something to ${selectedGroup.name}...`}
+                    className="flex-1 bg-gray-50 border-none rounded-xl px-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={isPosting || !groupPostContent.trim()}
+                    className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                  >
+                    {isPosting ? 'Posting...' : 'Post'}
+                  </button>
+                </div>
+              </form>
             </div>
 
             <div className="space-y-6">

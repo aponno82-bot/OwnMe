@@ -9,9 +9,10 @@ import { sendBrowserNotification } from '../../lib/notifications';
 
 interface NotificationCenterProps {
   onUserClick?: (userId: string) => void;
+  onNotificationClick?: (notification: Notification) => void;
 }
 
-export default function NotificationCenter({ onUserClick }: NotificationCenterProps) {
+export default function NotificationCenter({ onUserClick, onNotificationClick }: NotificationCenterProps) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +114,7 @@ export default function NotificationCenter({ onUserClick }: NotificationCenterPr
               key={notification.id}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
+              onClick={() => onNotificationClick?.(notification)}
               className={cn(
                 "flex items-center gap-4 p-3 rounded-2xl transition-all hover:bg-gray-50 cursor-pointer group",
                 !notification.is_read && "bg-emerald-50/30"

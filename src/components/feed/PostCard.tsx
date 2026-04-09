@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2 } from 'lucide-react';
 import VerificationBadge from '../VerificationBadge';
 import { Post, Comment } from '../../types';
-import { formatDate, cn } from '../../lib/utils';
+import { formatDate, cn, formatRelativeTime } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { toast } from 'sonner';
+import { createNotification } from '../../services/notificationService';
 
 interface PostCardProps {
   post: Post;
@@ -318,6 +319,9 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
             user_id: user.id,
             type: 'like'
           });
+        
+        // Send notification
+        await createNotification(post.user_id, user.id, 'like', post.id);
       }
     } catch (error) {
       // Rollback on error
@@ -341,12 +345,90 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
       });
 
       if (error) throw error;
+      
+      // Send notification
+      await createNotification(post.user_id, user.id, 'comment', post.id);
+      
       setNewComment('');
       setReplyingTo(null);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
       setIsSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      toast.success('Comment deleted');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    if (!user) {
+      toast.error('Please sign in to like comments');
+      return;
+    }
+
+    try {
+      // Check if already liked
+      const { data: existing } = await supabase
+        .from('comment_reactions')
+        .select('*')
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (existing) {
+        await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('comment_reactions')
+          .insert({
+            comment_id: commentId,
+            user_id: user.id,
+            type: 'like'
+          });
+      }
+      fetchComments(); // Refresh comments to get updated counts
+    } catch (error: any) {
+      console.error('Error liking comment:', error);
+    }
+  };
+
+  const [reportingComment, setReportingComment] = useState<Comment | null>(null);
+  const [commentReportReason, setCommentReportReason] = useState('');
+
+  const handleReportComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !reportingComment || !commentReportReason.trim()) return;
+
+    try {
+      const { error } = await supabase.from('reports').insert({
+        reporter_id: user.id,
+        target_id: reportingComment.id,
+        target_type: 'comment',
+        reason: commentReportReason.trim()
+      });
+      if (error) throw error;
+      toast.success('Comment reported');
+      setReportingComment(null);
+      setCommentReportReason('');
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -389,7 +471,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                         <VerificationBadge size="sm" />
                       )}
                     </span>
-                    <span className="text-[10px] text-gray-400">{formatDate(comment.created_at)}</span>
+                    <span className="text-[10px] text-gray-400">{formatRelativeTime(comment.created_at)}</span>
                   </div>
                   <p className={cn(
                     "text-gray-700",
@@ -400,11 +482,34 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
                 </div>
                 <div className="flex items-center gap-4 mt-1 ml-2">
                   <button 
+                    onClick={() => handleLikeComment(comment.id)}
+                    className="text-[10px] font-bold text-gray-400 hover:text-rose-500 transition-colors flex items-center gap-1"
+                  >
+                    <Heart className="w-3 h-3" />
+                    Like
+                  </button>
+                  <button 
                     onClick={() => setReplyingTo(comment)}
                     className="text-[10px] font-bold text-gray-400 hover:text-emerald-500 transition-colors"
                   >
                     Reply
                   </button>
+                  {(user?.id === comment.user_id || user?.id === post.user_id) && (
+                    <button 
+                      onClick={() => handleDeleteComment(comment.id)}
+                      className="text-[10px] font-bold text-gray-400 hover:text-rose-500 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  {user?.id !== comment.user_id && (
+                    <button 
+                      onClick={() => setReportingComment(comment)}
+                      className="text-[10px] font-bold text-gray-400 hover:text-rose-500 transition-colors"
+                    >
+                      Report
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -456,7 +561,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
               )}
             </div>
             <div className="flex items-center gap-2">
-              <p className="text-[10px] text-gray-400 font-medium">{formatDate(post.created_at)}</p>
+              <p className="text-[10px] text-gray-400 font-medium">{formatRelativeTime(post.created_at)}</p>
               <span className="text-gray-300">•</span>
               {post.privacy === 'public' && <Globe className="w-3 h-3 text-gray-400" />}
               {post.privacy === 'friends' && <Users className="w-3 h-3 text-gray-400" />}
@@ -794,6 +899,41 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Comment Report Modal */}
+      <AnimatePresence>
+        {reportingComment && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-xl font-bold">Report Comment</h2>
+                <button onClick={() => setReportingComment(null)} className="p-2 hover:bg-gray-50 rounded-full">
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+              <form onSubmit={handleReportComment} className="p-6 space-y-4">
+                <textarea 
+                  required
+                  rows={4}
+                  value={commentReportReason}
+                  onChange={(e) => setCommentReportReason(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-rose-500/20 resize-none text-sm"
+                  placeholder="Why are you reporting this comment?"
+                />
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setReportingComment(null)} className="flex-1 btn-secondary py-3">Cancel</button>
+                  <button type="submit" className="flex-1 btn-primary bg-rose-500 hover:bg-rose-600 py-3">Report</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Report Modal */}
       <AnimatePresence>
         {isReporting && (

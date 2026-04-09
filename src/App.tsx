@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from './lib/supabase';
 import { useAuth } from './lib/useAuth';
 import { Toaster } from 'sonner';
 import AuthForm from './components/auth/AuthForm';
@@ -26,10 +27,33 @@ export default function App() {
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
   const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
+  const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
+
+  const handleNotificationClick = async (notification: any) => {
+    // Mark as read
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
+
+    if (notification.type === 'message') {
+      handleNavigate('messages', notification.actor_id);
+    } else if (notification.type === 'follow') {
+      handleNavigate('profile', notification.actor_id);
+    } else if (notification.post_id) {
+      setHighlightPostId(notification.post_id);
+      handleNavigate('feed');
+    }
+  };
 
   useEffect(() => {
     if (user) {
       requestNotificationPermission();
+      // Request camera and microphone permissions
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(err => {
+          console.log('Media permissions denied or not available:', err);
+        });
     }
   }, [user]);
 
@@ -83,6 +107,7 @@ export default function App() {
               <Feed 
                 onUserClick={(id) => handleNavigate('profile', id)} 
                 onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
+                highlightPostId={highlightPostId}
               />
             )}
             {currentPage === 'reels' && <Reels onUserClick={(id) => handleNavigate('profile', id)} />}
@@ -114,7 +139,12 @@ export default function App() {
                 onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
               />
             )}
-            {currentPage === 'notifications' && <NotificationCenter onUserClick={(id) => handleNavigate('profile', id)} />}
+            {currentPage === 'notifications' && (
+              <NotificationCenter 
+                onUserClick={(id) => handleNavigate('profile', id)} 
+                onNotificationClick={handleNotificationClick}
+              />
+            )}
             {currentPage === 'groups' && <Groups />}
             {currentPage === 'settings' && <Settings />}
             {currentPage === 'admin' && <AdminPanel />}

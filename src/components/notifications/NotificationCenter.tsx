@@ -5,6 +5,7 @@ import { Notification } from '../../types';
 import { formatDate, cn } from '../../lib/utils';
 import { Bell, Heart, MessageCircle, UserPlus, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { sendBrowserNotification } from '../../lib/notifications';
 
 interface NotificationCenterProps {
   onUserClick?: (userId: string) => void;
@@ -58,6 +59,10 @@ export default function NotificationCenter({ onUserClick }: NotificationCenterPr
     
     if (data) {
       setNotifications(prev => [data, ...prev]);
+      sendBrowserNotification('New Notification', {
+        body: getMessage(data),
+        icon: data.profiles?.avatar_url || '/favicon.ico'
+      });
     }
   }
 

@@ -282,7 +282,8 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
               <button 
                 onClick={() => coverInputRef.current?.click()}
                 disabled={!!uploading}
-                className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-md p-2 rounded-xl text-gray-700 hover:bg-white transition-all shadow-sm opacity-0 group-hover:opacity-100"
+                className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md p-2.5 rounded-xl text-emerald-600 hover:bg-white transition-all shadow-lg z-20 border border-emerald-100 active:scale-95"
+                title="Update Cover Photo"
               >
                 {uploading === 'cover' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
               </button>
@@ -314,9 +315,11 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                     />
                     <div 
                       onClick={() => avatarInputRef.current?.click()}
-                      className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      className="absolute inset-0 bg-black/20 flex items-center justify-center hover:bg-black/40 transition-all cursor-pointer group/avatar"
                     >
-                      {uploading === 'avatar' ? <Loader2 className="w-6 h-6 text-white animate-spin" /> : <Camera className="w-6 h-6 text-white" />}
+                      <div className="bg-white/90 p-2 rounded-xl shadow-lg transform scale-90 group-hover/avatar:scale-100 transition-all">
+                        {uploading === 'avatar' ? <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" /> : <Camera className="w-5 h-5 text-emerald-600" />}
+                      </div>
                     </div>
                   </>
                 )}

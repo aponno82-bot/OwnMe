@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { usePresence } from '../../lib/usePresence';
 import { cn, formatDate } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { sendBrowserNotification } from '../../lib/notifications';
 
 interface MessengerProps {
   initialContactId?: string | null;
@@ -20,6 +21,7 @@ export default function Messenger({ initialContactId }: MessengerProps) {
   const [activeChat, setActiveChat] = useState<Profile | null>(null);
   const activeChatRef = useRef<Profile | null>(null);
   const [contacts, setContacts] = useState<Profile[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
@@ -74,7 +76,9 @@ export default function Messenger({ initialContactId }: MessengerProps) {
           setMessages(prev => [...prev, msg]);
           markAsRead(msg.id);
         } else {
-          toast.info(`New message from ${msg.sender_id === user.id ? 'you' : 'someone'}`);
+          // Send browser notification
+          fetchProfileForNotification(msg.sender_id, msg.content);
+          toast.info(`New message from someone`);
         }
       })
       .subscribe();
@@ -83,6 +87,16 @@ export default function Messenger({ initialContactId }: MessengerProps) {
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
+
+  async function fetchProfileForNotification(userId: string, content: string) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (data) {
+      sendBrowserNotification(`Message from ${data.full_name || data.username}`, {
+        body: content,
+        icon: data.avatar_url || '/favicon.ico'
+      });
+    }
+  }
 
   async function fetchCallerProfile(userId: string, type: 'audio' | 'video') {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -633,6 +647,8 @@ export default function Messenger({ initialContactId }: MessengerProps) {
         <input
           type="text"
           placeholder="Search messages..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-2xl text-xs focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
         />
       </div>
@@ -640,7 +656,12 @@ export default function Messenger({ initialContactId }: MessengerProps) {
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Recent Messages</h3>
         <div className="space-y-1">
-          {contacts.map((contact) => (
+          {contacts
+            .filter(c => 
+              c.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
+              c.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+            .map((contact) => (
             <button
               key={contact.id}
               onClick={() => {

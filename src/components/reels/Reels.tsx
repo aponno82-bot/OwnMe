@@ -1,22 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Post } from '../../types';
-import { Heart, MessageCircle, Share2, Music2, User as UserIcon, Loader2, ChevronUp, ChevronDown, Video } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music2, User as UserIcon, Loader2, ChevronUp, ChevronDown, Video, X, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../lib/useAuth';
+import { useConnections } from '../../lib/useConnections';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 
 interface ReelCardProps {
   reel: Post;
   isActive: boolean;
+  onUserClick: (userId: string) => void;
 }
 
-function ReelCard({ reel, isActive }: ReelCardProps) {
-  const { user } = useAuth();
+function ReelCard({ reel, isActive, onUserClick }: ReelCardProps) {
+  const { user, profile } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(reel.reactions_count || 0);
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { isFollowing, toggleFollow, loading: followLoading } = useConnections(reel.user_id);
 
   useEffect(() => {
     if (isActive && videoRef.current) {
@@ -66,14 +73,71 @@ function ReelCard({ reel, isActive }: ReelCardProps) {
     }
   };
 
+  const handleShare = async () => {
+    try {
+      await navigator.share({
+        title: 'Check out this reel!',
+        text: reel.content,
+        url: window.location.href
+      });
+    } catch (error) {
+      // Fallback to copy link
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Link copied to clipboard!');
+    }
+  };
+
+  const fetchComments = async () => {
+    const { data } = await supabase
+      .from('comments')
+      .select('*, profiles (*)')
+      .eq('post_id', reel.id)
+      .order('created_at', { ascending: true });
+    if (data) setComments(data);
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || !user) return;
+    setIsSubmitting(true);
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .insert({
+          post_id: reel.id,
+          user_id: user.id,
+          text: newComment.trim()
+        })
+        .select('*, profiles (*)')
+        .single();
+      if (error) throw error;
+      setComments(prev => [...prev, data]);
+      setNewComment('');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showComments) {
+      fetchComments();
+    }
+  }, [showComments]);
+
   return (
     <div className="relative h-full w-full bg-black flex items-center justify-center overflow-hidden">
       <video
         ref={videoRef}
         src={reel.media_url || ''}
-        className="h-full w-full object-contain"
+        className="h-full w-full object-contain cursor-pointer"
         loop
         playsInline
+        onClick={() => {
+          if (videoRef.current?.paused) videoRef.current.play();
+          else videoRef.current?.pause();
+        }}
       />
 
       {/* Overlay */}
@@ -94,14 +158,20 @@ function ReelCard({ reel, isActive }: ReelCardProps) {
           <span className="text-white text-xs font-bold shadow-sm">{likesCount}</span>
         </button>
 
-        <button className="flex flex-col items-center gap-1 group">
+        <button 
+          onClick={() => setShowComments(true)}
+          className="flex flex-col items-center gap-1 group"
+        >
           <div className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-all active:scale-90">
             <MessageCircle className="w-7 h-7" />
           </div>
           <span className="text-white text-xs font-bold shadow-sm">{reel.comments_count || 0}</span>
         </button>
 
-        <button className="flex flex-col items-center gap-1 group">
+        <button 
+          onClick={handleShare}
+          className="flex flex-col items-center gap-1 group"
+        >
           <div className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-all active:scale-90">
             <Share2 className="w-7 h-7" />
           </div>
@@ -110,22 +180,41 @@ function ReelCard({ reel, isActive }: ReelCardProps) {
       </div>
 
       {/* Bottom Info */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
+      <div className="absolute bottom-0 left-0 right-0 p-6 z-10 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full border-2 border-white overflow-hidden">
+          <div 
+            className="w-10 h-10 rounded-full border-2 border-white overflow-hidden cursor-pointer"
+            onClick={() => onUserClick(reel.user_id)}
+          >
             {reel.profiles?.avatar_url ? (
-              <img src={reel.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+              <img src={reel.profiles.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
               <div className="w-full h-full bg-emerald-500 flex items-center justify-center text-white font-bold">
                 {reel.profiles?.username?.[0]?.toUpperCase()}
               </div>
             )}
           </div>
-          <div>
-            <h3 className="text-white font-bold text-lg">@{reel.profiles?.username}</h3>
-            <button className="text-xs font-bold text-white/80 hover:text-white border border-white/30 px-3 py-1 rounded-full mt-1">
-              Follow
-            </button>
+          <div className="flex-1">
+            <h3 
+              className="text-white font-bold text-lg cursor-pointer hover:underline"
+              onClick={() => onUserClick(reel.user_id)}
+            >
+              @{reel.profiles?.username}
+            </h3>
+            {user?.id !== reel.user_id && (
+              <button 
+                onClick={toggleFollow}
+                disabled={followLoading}
+                className={cn(
+                  "text-xs font-bold px-4 py-1 rounded-full mt-1 transition-all active:scale-95",
+                  isFollowing 
+                    ? "bg-white/20 text-white border border-white/30" 
+                    : "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                )}
+              >
+                {isFollowing ? 'Following' : 'Follow'}
+              </button>
+            )}
           </div>
         </div>
         
@@ -136,11 +225,85 @@ function ReelCard({ reel, isActive }: ReelCardProps) {
           <span className="text-xs font-medium">Original Audio - {reel.profiles?.username}</span>
         </div>
       </div>
+
+      {/* Comments Drawer */}
+      <AnimatePresence>
+        {showComments && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowComments(false)}
+              className="absolute inset-0 bg-black/40 z-40"
+            />
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="absolute bottom-0 left-0 right-0 h-[70%] bg-white rounded-t-[32px] z-50 flex flex-col"
+            >
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-gray-900">Comments</h3>
+                <button onClick={() => setShowComments(false)} className="p-2 hover:bg-gray-50 rounded-full">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
+                      {comment.profiles?.avatar_url ? (
+                        <img src={comment.profiles.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold">
+                          {comment.profiles?.username?.[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="bg-gray-50 rounded-2xl px-4 py-2">
+                        <span className="text-xs font-bold text-gray-900 block mb-1">{comment.profiles?.username}</span>
+                        <p className="text-sm text-gray-700">{comment.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {comments.length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-gray-400 text-sm">No comments yet. Be the first!</p>
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleAddComment} className="p-4 border-t border-gray-100 bg-white">
+                <div className="flex gap-3">
+                  <input 
+                    type="text" 
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={isSubmitting || !newComment.trim()}
+                    className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-all"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-export default function Reels() {
+export default function Reels({ onUserClick }: { onUserClick: (id: string) => void }) {
   const [reels, setReels] = useState<Post[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -203,7 +366,11 @@ export default function Reels() {
       >
         {reels.map((reel, index) => (
           <div key={reel.id} className="h-full w-full snap-start">
-            <ReelCard reel={reel} isActive={index === activeIndex} />
+            <ReelCard 
+              reel={reel} 
+              isActive={index === activeIndex} 
+              onUserClick={onUserClick}
+            />
           </div>
         ))}
       </div>

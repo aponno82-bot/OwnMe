@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from './lib/useAuth';
 import { Toaster } from 'sonner';
 import AuthForm from './components/auth/AuthForm';
@@ -17,6 +17,7 @@ import Settings from './components/settings/Settings';
 import TrendingHashtags from './components/explore/TrendingHashtags';
 import HashtagFeed from './components/explore/HashtagFeed';
 import { Users, Calendar } from 'lucide-react';
+import { requestNotificationPermission } from './lib/notifications';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
@@ -24,6 +25,12 @@ export default function App() {
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
   const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      requestNotificationPermission();
+    }
+  }, [user]);
 
   const handleNavigate = (page: any, id?: string) => {
     setCurrentPage(page);
@@ -77,7 +84,7 @@ export default function App() {
                 onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
               />
             )}
-            {currentPage === 'reels' && <Reels />}
+            {currentPage === 'reels' && <Reels onUserClick={(id) => handleNavigate('profile', id)} />}
             {currentPage === 'hashtag' && activeHashtag && (
               <HashtagFeed 
                 hashtag={activeHashtag} 
@@ -92,7 +99,11 @@ export default function App() {
                 onNavigate={handleNavigate}
               />
             )}
-            {currentPage === 'messages' && <Messenger initialContactId={activeChatUserId} />}
+            {currentPage === 'messages' && (
+              <div className="fixed inset-0 top-[72px] bottom-[80px] lg:static lg:h-[calc(100vh-120px)] z-40 bg-white">
+                <Messenger initialContactId={activeChatUserId} />
+              </div>
+            )}
             {currentPage === 'explore' && (
               <Explore 
                 onUserClick={(id) => handleNavigate('profile', id)} 

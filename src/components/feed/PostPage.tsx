@@ -1,24 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { Post } from '../../types';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import PostCard from './PostCard';
+import { Post } from '../../types';
+import PostCard from '../feed/PostCard';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
-interface PostPageProps {
-  postId: string;
-  onBack: () => void;
-  onUserClick: (userId: string) => void;
-  onHashtagClick: (hashtag: string) => void;
-}
-
-export default function PostPage({ postId, onBack, onUserClick, onHashtagClick }: PostPageProps) {
+export default function PostPage() {
+  const { postId } = useParams();
+  const navigate = useNavigate();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPost();
+    if (postId) {
+      fetchPost();
+    }
   }, [postId]);
 
   async function fetchPost() {
@@ -32,9 +29,8 @@ export default function PostPage({ postId, onBack, onUserClick, onHashtagClick }
 
       if (error) throw error;
       setPost(data);
-    } catch (err: any) {
-      console.error('Error fetching post:', err);
-      setError(err.message);
+    } catch (error: any) {
+      console.error('Error fetching post:', error);
     } finally {
       setLoading(false);
     }
@@ -42,17 +38,22 @@ export default function PostPage({ postId, onBack, onUserClick, onHashtagClick }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
       </div>
     );
   }
 
-  if (error || !post) {
+  if (!post) {
     return (
-      <div className="card-premium p-8 text-center">
-        <p className="text-gray-500 mb-4">{error || 'Post not found'}</p>
-        <button onClick={onBack} className="btn-primary px-6 py-2">Go Back</button>
+      <div className="text-center py-12">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Post not found</h2>
+        <button 
+          onClick={() => navigate(-1)}
+          className="text-emerald-600 font-bold hover:underline"
+        >
+          Go back
+        </button>
       </div>
     );
   }
@@ -61,22 +62,23 @@ export default function PostPage({ postId, onBack, onUserClick, onHashtagClick }
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="max-w-2xl mx-auto space-y-6"
     >
-      <div className="flex items-center gap-4 mb-2">
+      <div className="flex items-center gap-4 mb-6">
         <button 
-          onClick={onBack}
+          onClick={() => navigate(-1)}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         >
-          <ArrowLeft className="w-6 h-6 text-gray-600" />
+          <ChevronLeft className="w-6 h-6 text-gray-600" />
         </button>
         <h1 className="text-xl font-bold text-gray-900">Post</h1>
       </div>
 
       <PostCard 
         post={post} 
-        onUserClick={onUserClick}
-        onHashtagClick={onHashtagClick}
+        onUserClick={(userId) => navigate(`/profile/${userId}`)}
+        onHashtagClick={(tag) => navigate(`/hashtag/${tag}`)}
+        onPostClick={() => {}} // Already on post page
       />
     </motion.div>
   );

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck } from 'lucide-react';
+import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck, Trash2, Shield, Ban, MessageSquare, Heart, Smile, VideoOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
-import { Message, Profile } from '../../types';
+import { Message, Profile, Connection } from '../../types';
 import { toast } from 'sonner';
 import { usePresence } from '../../lib/usePresence';
 import { cn, formatDate } from '../../lib/utils';
@@ -12,6 +12,7 @@ import { sendBrowserNotification } from '../../lib/notifications';
 import { createNotification } from '../../services/notificationService';
 import VoicePlayer from './VoicePlayer';
 import VideoPlayer from './VideoPlayer';
+import CallModal from './CallModal';
 
 interface MessengerProps {
   initialContactId?: string | null;
@@ -31,6 +32,9 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   const [uploading, setUploading] = useState(false);
   const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
   const [incomingCall, setIncomingCall] = useState<{ from: Profile, type: 'audio' | 'video' } | null>(null);
+  const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended' | null>(null);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const messageInputRef = useRef<HTMLInputElement>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isBlockingMe, setIsBlockingMe] = useState(false);
@@ -64,6 +68,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     if (!user) return;
     
     fetchContacts();
+    fetchConnections();
     
     const channel = supabase
       .channel(`messages:${user.id}:${instanceId.current}`)
@@ -77,9 +82,24 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
           const currentActiveChat = activeChatRef.current;
           
           if (msg.receiver_id === user.id) {
-            if (msg.media_type === 'call' && msg.content === 'START_CALL') {
-              fetchCallerProfile(msg.sender_id, msg.media_url as 'audio' | 'video');
-              return;
+            // Handle Call Signaling
+            if (msg.media_type === 'call') {
+              if (msg.content === 'START_CALL') {
+                fetchCallerProfile(msg.sender_id, msg.media_url as 'audio' | 'video');
+                setCallStatus('ringing');
+                return;
+              } else if (msg.content === 'END_CALL') {
+                setCallStatus('ended');
+                setTimeout(() => {
+                  setIncomingCall(null);
+                  setIsCalling(null);
+                  setCallStatus(null);
+                }, 2000);
+                return;
+              } else if (msg.content === 'ACCEPT_CALL') {
+                setCallStatus('connected');
+                return;
+              }
             }
 
             if (currentActiveChat && msg.sender_id === currentActiveChat.id) {
@@ -104,6 +124,23 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
+
+  async function fetchConnections() {
+    if (!user) return;
+    const { data } = await supabase
+      .from('connections')
+      .select('*')
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+      .eq('status', 'accepted');
+    if (data) setConnections(data);
+  }
+
+  const isMutualFollow = (otherUserId: string) => {
+    if (!user) return false;
+    const following = connections.some(c => c.sender_id === user.id && c.receiver_id === otherUserId);
+    const follower = connections.some(c => c.sender_id === otherUserId && c.receiver_id === user.id);
+    return following && follower;
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -133,10 +170,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   }
 
   async function markAsRead(messageId: string) {
-    if (profile?.read_receipts_enabled === false) return;
     await supabase.from('messages').update({ 
-      is_read: true,
-      seen_at: new Date().toISOString()
+      is_read: true
     }).eq('id', messageId);
   }
 
@@ -291,12 +326,13 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         content: 'Voice message',
         media_url: publicUrl,
         media_type: 'audio' as const,
-        is_delivered: isUserOnline(activeChat.id),
-        delivered_at: isUserOnline(activeChat.id) ? new Date().toISOString() : null
       };
 
       const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
-      if (error) throw error;
+      if (error) {
+        console.error('Insert voice message error:', error);
+        throw error;
+      }
       setMessages(prev => [...prev, data]);
     } catch (error: any) {
       toast.error(error.message);
@@ -342,12 +378,13 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         content: file.name,
         media_url: publicUrl,
         media_type: mediaType,
-        is_delivered: isUserOnline(activeChat.id),
-        delivered_at: isUserOnline(activeChat.id) ? new Date().toISOString() : null
       };
 
       const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
-      if (error) throw error;
+      if (error) {
+        console.error('Insert file message error:', error);
+        throw error;
+      }
       
       setMessages(prev => [...prev, data]);
     } catch (error: any) {
@@ -361,20 +398,25 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     e.preventDefault();
     if (!newMessage.trim() || !activeChat || !user) return;
 
+    const isFollowing = connections.some(c => c.sender_id === user.id && c.receiver_id === activeChat.id);
+    
     const messageObj = {
       sender_id: user.id,
       receiver_id: activeChat.id,
       content: newMessage.trim(),
-      is_delivered: isUserOnline(activeChat.id),
-      delivered_at: isUserOnline(activeChat.id) ? new Date().toISOString() : null
     };
 
     const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
     if (error) {
-      toast.error('Failed to send message');
+      console.error('Send message error:', error);
+      toast.error(`Failed to send message: ${error.message}`);
     } else {
       setMessages(prev => [...prev, data]);
       setNewMessage('');
+      // Keep focus on input for mobile keyboard
+      setTimeout(() => {
+        messageInputRef.current?.focus();
+      }, 0);
       
       // Send notification
       if (activeChat) {
@@ -383,7 +425,6 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     }
   };
 
-  const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended' | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const callTimerRef = useRef<any>(null);
 
@@ -398,28 +439,44 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       receiver_id: activeChat.id,
       content: 'START_CALL',
       media_type: 'call',
-      media_url: type
+      media_url: type,
+      is_read: false
+    });
+  };
+
+  const acceptCall = async () => {
+    if (!incomingCall || !user) return;
+    
+    await supabase.from('messages').insert({
+      sender_id: user.id,
+      receiver_id: incomingCall.from.id,
+      content: 'ACCEPT_CALL',
+      media_type: 'call',
+      is_read: false
     });
 
-    // Send notification
-    await createNotification(activeChat.id, user.id, 'message', undefined, { title: 'Incoming Call', body: `${user.id} is calling you...` });
-  };
-
-  const acceptCall = () => {
     setCallStatus('connected');
-    setCallDuration(0);
-    callTimerRef.current = setInterval(() => {
-      setCallDuration(prev => prev + 1);
-    }, 1000);
+    setIsCalling(incomingCall.type);
   };
 
-  const endCall = () => {
-    setIsCalling(null);
-    setIncomingCall(null);
-    setCallStatus(null);
-    if (callTimerRef.current) {
-      clearInterval(callTimerRef.current);
-    }
+  const endCall = async () => {
+    if (!user || (!activeChat && !incomingCall)) return;
+    const targetId = activeChat?.id || incomingCall?.from.id;
+    
+    await supabase.from('messages').insert({
+      sender_id: user.id,
+      receiver_id: targetId,
+      content: 'END_CALL',
+      media_type: 'call',
+      is_read: false
+    });
+
+    setCallStatus('ended');
+    setTimeout(() => {
+      setIsCalling(null);
+      setIncomingCall(null);
+      setCallStatus(null);
+    }, 2000);
   };
 
   const renderMessageContent = (msg: Message) => {
@@ -468,61 +525,14 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         {/* Call UI Overlays */}
         <AnimatePresence>
           {(isCalling || incomingCall) && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-[100] bg-emerald-900/95 backdrop-blur-xl flex flex-col items-center justify-center text-white p-8"
-            >
-              <div className="w-24 h-24 rounded-full bg-white/10 p-1 mb-6 animate-pulse">
-                <div className="w-full h-full rounded-full overflow-hidden border-2 border-white/20">
-                  {(isCalling ? activeChat : incomingCall?.from)?.avatar_url ? (
-                    <img src={(isCalling ? activeChat : incomingCall?.from)!.avatar_url!} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-emerald-800 text-2xl font-bold">
-                      {(isCalling ? activeChat : incomingCall?.from)!.username[0].toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <h2 className="text-2xl font-bold mb-2">
-                {(isCalling ? activeChat : incomingCall?.from)!.full_name || (isCalling ? activeChat : incomingCall?.from)!.username}
-              </h2>
-              
-              <div className="text-emerald-200 mb-12 flex flex-col items-center gap-2">
-                {callStatus === 'connected' ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                      <span className="font-mono text-xl">{formatDuration(callDuration)}</span>
-                    </div>
-                    <span className="text-xs uppercase tracking-widest opacity-60">Connected</span>
-                  </>
-                ) : (
-                  <p className="animate-bounce">
-                    {isCalling ? `Calling (${isCalling})...` : `Incoming ${incomingCall?.type} call...`}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex gap-8">
-                {incomingCall && callStatus !== 'connected' && (
-                  <button 
-                    onClick={acceptCall}
-                    className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-emerald-500/20"
-                  >
-                    {incomingCall.type === 'video' ? <Video className="w-8 h-8" /> : <Phone className="w-8 h-8" />}
-                  </button>
-                )}
-                <button 
-                  onClick={endCall}
-                  className="w-16 h-16 rounded-full bg-rose-500 hover:bg-rose-400 flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-rose-500/20"
-                >
-                  <PhoneOff className="w-8 h-8" />
-                </button>
-              </div>
-            </motion.div>
+            <CallModal 
+              type={isCalling || incomingCall?.type || 'audio'}
+              status={callStatus || 'ringing'}
+              contact={incomingCall?.from || activeChat!}
+              isIncoming={!!incomingCall && !isCalling}
+              onEnd={endCall}
+              onAccept={acceptCall}
+            />
           )}
         </AnimatePresence>
 
@@ -552,9 +562,9 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                   </h4>
                   <p className={cn(
                     "text-[10px] font-bold uppercase tracking-wider",
-                    isUserOnline(activeChat.id) ? "text-emerald-500" : "text-gray-400"
+                    (isUserOnline(activeChat.id) && isMutualFollow(activeChat.id)) ? "text-emerald-500" : "text-gray-400"
                   )}>
-                    {isUserOnline(activeChat.id) ? 'Online' : 'Offline'}
+                    {(isUserOnline(activeChat.id) && isMutualFollow(activeChat.id)) ? 'Online' : 'Offline'}
                   </p>
                 </div>
               </div>
@@ -713,6 +723,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                   <div className="relative flex-1">
                     <input
                       type="text"
+                      ref={messageInputRef}
                       placeholder="Type a message..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
@@ -855,6 +866,19 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
           ))}
         </div>
       </div>
+      
+      <AnimatePresence>
+        {(isCalling || incomingCall) && (
+          <CallModal 
+            type={isCalling || incomingCall?.type || 'audio'}
+            status={callStatus || 'ringing'}
+            contact={incomingCall?.from || activeChat!}
+            isIncoming={!!incomingCall && !isCalling}
+            onEnd={endCall}
+            onAccept={acceptCall}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

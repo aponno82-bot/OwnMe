@@ -1,34 +1,31 @@
 import { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAuth } from './lib/useAuth';
 import { Toaster } from 'sonner';
+import { requestNotificationPermission } from './lib/notifications';
 import AuthForm from './components/auth/AuthForm';
 import Navbar from './components/layout/Navbar';
 import Sidebar from './components/layout/Sidebar';
 import Feed from './components/feed/Feed';
 import Messenger from './components/messenger/Messenger';
 import BottomNav from './components/layout/BottomNav';
+import PostPage from './components/feed/PostPage';
 import ProfilePage from './components/profile/ProfilePage';
 import NotificationCenter from './components/notifications/NotificationCenter';
 import Explore from './components/explore/Explore';
-import SuggestedUsers from './components/explore/SuggestedUsers';
 import Groups from './components/groups/Groups';
 import Reels from './components/reels/Reels';
 import Settings from './components/settings/Settings';
 import AdminPanel from './components/admin/AdminPanel';
 import TrendingHashtags from './components/explore/TrendingHashtags';
 import HashtagFeed from './components/explore/HashtagFeed';
-import PostPage from './components/feed/PostPage';
 import { Users, Calendar } from 'lucide-react';
-import { requestNotificationPermission } from './lib/notifications';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
-  const [currentPage, setCurrentPage] = useState<'feed' | 'profile' | 'explore' | 'notifications' | 'messages' | 'reels' | 'hashtag' | 'groups' | 'events' | 'settings' | 'admin' | 'post'>('feed');
-  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
-  const [viewingPostId, setViewingPostId] = useState<string | null>(null);
-  const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
-  const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
 
   const handleNotificationClick = async (notification: any) => {
@@ -36,17 +33,17 @@ export default function App() {
     await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
 
     if (notification.type === 'message') {
-      handleNavigate('messages', notification.actor_id);
+      navigate(`/messages/${notification.actor_id}`);
     } else if (notification.type === 'follow') {
-      handleNavigate('profile', notification.actor_id);
+      navigate(`/profile/${notification.actor_id}`);
     } else if (notification.post_id) {
-      handleNavigate('post', notification.post_id);
+      navigate(`/post/${notification.post_id}`);
     }
   };
 
   useEffect(() => {
+    requestNotificationPermission();
     if (user) {
-      requestNotificationPermission();
       // Request camera and microphone permissions
       navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
@@ -58,24 +55,42 @@ export default function App() {
     }
   }, [user]);
 
-  const handleNavigate = (page: any, id?: string) => {
-    setCurrentPage(page);
-    if (page === 'profile') {
-      setViewingUserId(id || user?.id || null);
-    } else if (page === 'hashtag') {
-      setActiveHashtag(id || null);
-    } else if (page === 'messages') {
-      setActiveChatUserId(id || null);
-    } else if (page === 'post') {
-      setViewingPostId(id || null);
-    } else {
-      setViewingUserId(null);
-      setActiveHashtag(null);
-      setActiveChatUserId(null);
-      setViewingPostId(null);
-    }
+  const handleNavigate = (page: string, id?: string) => {
+    if (page === 'feed') navigate('/');
+    else if (page === 'profile') navigate(`/profile/${id || user?.id}`);
+    else if (page === 'explore') navigate('/explore');
+    else if (page === 'notifications') navigate('/notifications');
+    else if (page === 'messages') navigate(id ? `/messages/${id}` : '/messages');
+    else if (page === 'reels') navigate('/reels');
+    else if (page === 'hashtag') navigate(`/hashtag/${id}`);
+    else if (page === 'groups') navigate('/groups');
+    else if (page === 'settings') navigate('/settings');
+    else if (page === 'admin') navigate('/admin');
+    else if (page === 'post') navigate(`/post/${id}`);
+    else if (page === 'events') navigate('/events');
+    
     window.scrollTo(0, 0);
   };
+
+  // Get current page from location for Navbar/Sidebar highlighting
+  const getCurrentPage = () => {
+    const path = location.pathname;
+    if (path === '/') return 'feed';
+    if (path.startsWith('/profile')) return 'profile';
+    if (path.startsWith('/explore')) return 'explore';
+    if (path.startsWith('/notifications')) return 'notifications';
+    if (path.startsWith('/messages')) return 'messages';
+    if (path.startsWith('/reels')) return 'reels';
+    if (path.startsWith('/hashtag')) return 'hashtag';
+    if (path.startsWith('/groups')) return 'groups';
+    if (path.startsWith('/settings')) return 'settings';
+    if (path.startsWith('/admin')) return 'admin';
+    if (path.startsWith('/post')) return 'post';
+    if (path.startsWith('/events')) return 'events';
+    return 'feed';
+  };
+
+  const currentPage = getCurrentPage();
 
   if (loading) {
     return (
@@ -87,95 +102,72 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <>
         <AuthForm />
-        <Toaster position="top-center" />
-      </div>
+        <Toaster position="top-right" richColors />
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 font-sans">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24 sm:pb-8">
+      <main className="flex-1 container mx-auto px-4 py-6 lg:py-8 mt-[72px] mb-[80px] lg:mb-0">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Sidebar - Hidden on mobile */}
+          {/* Left Sidebar - Navigation */}
           <aside className="hidden lg:block lg:col-span-3 sticky top-24 h-[calc(100vh-120px)]">
             <Sidebar onNavigate={handleNavigate} currentPage={currentPage} />
           </aside>
 
           {/* Main Content */}
-          <section className="lg:col-span-6">
-            {currentPage === 'feed' && (
-              <Feed 
-                onUserClick={(id) => handleNavigate('profile', id)} 
-                onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
-                onPostClick={(id) => handleNavigate('post', id)}
-                highlightPostId={highlightPostId}
-              />
-            )}
-            {currentPage === 'reels' && <Reels onUserClick={(id) => handleNavigate('profile', id)} />}
-            {currentPage === 'post' && viewingPostId && (
-              <PostPage 
-                postId={viewingPostId} 
-                onBack={() => handleNavigate('feed')}
-                onUserClick={(id) => handleNavigate('profile', id)}
-                onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
-              />
-            )}
-            {currentPage === 'hashtag' && activeHashtag && (
-              <HashtagFeed 
-                hashtag={activeHashtag} 
-                onBack={() => handleNavigate('feed')}
-                onUserClick={(id) => handleNavigate('profile', id)}
-                onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
-                onPostClick={(id) => handleNavigate('post', id)}
-              />
-            )}
-            {currentPage === 'profile' && (
-              <ProfilePage 
-                userId={viewingUserId || user.id} 
-                onNavigate={handleNavigate}
-              />
-            )}
-            {currentPage === 'messages' && (
-              <div className="fixed inset-0 top-[72px] bottom-[80px] lg:static lg:h-[calc(100vh-120px)] z-40 bg-white">
-                <Messenger 
-                  initialContactId={activeChatUserId} 
-                  onUserClick={(id) => handleNavigate('profile', id)}
+          <section className="col-span-1 lg:col-span-6">
+            <Routes>
+              <Route path="/" element={
+                <Feed 
+                  onUserClick={(id) => handleNavigate('profile', id)} 
+                  onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
+                  onPostClick={(id) => handleNavigate('post', id)}
+                  highlightPostId={highlightPostId}
                 />
-              </div>
-            )}
-            {currentPage === 'explore' && (
-              <Explore 
-                onUserClick={(id) => handleNavigate('profile', id)} 
-                onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
-                onPostClick={(id) => handleNavigate('post', id)}
-              />
-            )}
-            {currentPage === 'notifications' && (
-              <NotificationCenter 
-                onUserClick={(id) => handleNavigate('profile', id)} 
-                onNotificationClick={handleNotificationClick}
-              />
-            )}
-            {currentPage === 'groups' && <Groups />}
-            {currentPage === 'settings' && <Settings />}
-            {currentPage === 'admin' && <AdminPanel />}
-            {currentPage === 'events' && (
-              <div className="card-premium p-12 text-center">
-                <Calendar className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Events</h2>
-                <p className="text-gray-500">Upcoming events feature is coming soon!</p>
-              </div>
-            )}
+              } />
+              <Route path="/reels" element={<Reels onUserClick={(id) => handleNavigate('profile', id)} />} />
+              <Route path="/post/:postId" element={<PostPage />} />
+              <Route path="/hashtag/:hashtag" element={<HashtagFeedWrapper onNavigate={handleNavigate} />} />
+              <Route path="/profile/:userId" element={<ProfilePageWrapper onNavigate={handleNavigate} />} />
+              <Route path="/profile" element={<ProfilePageWrapper onNavigate={handleNavigate} />} />
+              <Route path="/messages/:contactId" element={<MessengerWrapper onUserClick={(id) => handleNavigate('profile', id)} />} />
+              <Route path="/messages" element={<MessengerWrapper onUserClick={(id) => handleNavigate('profile', id)} />} />
+              <Route path="/explore" element={
+                <Explore 
+                  onUserClick={(id) => handleNavigate('profile', id)} 
+                  onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
+                  onPostClick={(id) => handleNavigate('post', id)}
+                />
+              } />
+              <Route path="/notifications" element={
+                <NotificationCenter 
+                  onUserClick={(id) => handleNavigate('profile', id)} 
+                  onNotificationClick={handleNotificationClick}
+                />
+              } />
+              <Route path="/groups" element={<Groups />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/events" element={
+                <div className="card-premium p-12 text-center">
+                  <Calendar className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Events</h2>
+                  <p className="text-gray-500">Upcoming events feature is coming soon!</p>
+                </div>
+              } />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </section>
 
           {/* Right Sidebar - Messenger/Activity */}
           <aside className="hidden lg:block lg:col-span-3 sticky top-24 h-[calc(100vh-120px)] overflow-y-auto no-scrollbar">
             <TrendingHashtags onHashtagClick={(tag) => handleNavigate('hashtag', tag)} />
-            <SuggestedUsers onUserClick={(id) => id === 'explore' ? handleNavigate('explore') : handleNavigate('profile', id)} />
             <Messenger />
           </aside>
         </div>
@@ -185,6 +177,45 @@ export default function App() {
       <BottomNav onNavigate={handleNavigate} currentPage={currentPage} />
       
       <Toaster position="top-right" richColors />
+    </div>
+  );
+}
+
+// Wrapper components to handle URL parameters
+import { useParams } from 'react-router-dom';
+
+function HashtagFeedWrapper({ onNavigate }: { onNavigate: (page: string, id?: string) => void }) {
+  const { hashtag } = useParams();
+  return (
+    <HashtagFeed 
+      hashtag={hashtag!} 
+      onBack={() => onNavigate('feed')}
+      onUserClick={(id) => onNavigate('profile', id)}
+      onHashtagClick={(tag) => onNavigate('hashtag', tag)}
+      onPostClick={(id) => onNavigate('post', id)}
+    />
+  );
+}
+
+function ProfilePageWrapper({ onNavigate }: { onNavigate: (page: string, id?: string) => void }) {
+  const { userId } = useParams();
+  const { user } = useAuth();
+  return (
+    <ProfilePage 
+      userId={userId || user?.id || ''} 
+      onNavigate={onNavigate}
+    />
+  );
+}
+
+function MessengerWrapper({ onUserClick }: { onUserClick: (userId: string) => void }) {
+  const { contactId } = useParams();
+  return (
+    <div className="fixed inset-0 top-[72px] bottom-[80px] lg:static lg:h-[calc(100vh-120px)] z-40 bg-white">
+      <Messenger 
+        initialContactId={contactId} 
+        onUserClick={onUserClick}
+      />
     </div>
   );
 }

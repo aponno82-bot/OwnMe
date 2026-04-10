@@ -13,6 +13,7 @@ export interface Profile {
   is_verified?: boolean;
   role?: 'admin' | 'user';
   read_receipts_enabled?: boolean;
+  is_private?: boolean;
 }
 
 export interface Post {
@@ -90,6 +91,7 @@ export interface Message {
   is_delivered?: boolean;
   delivered_at?: string | null;
   seen_at?: string | null;
+  status?: 'sent' | 'delivered' | 'seen' | 'request';
 }
 
 export interface Group {

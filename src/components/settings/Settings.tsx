@@ -103,32 +103,19 @@ export default function Settings() {
                   <p className="text-[10px] text-gray-400">Only followers can see your posts</p>
                 </div>
               </div>
-              <div className="w-12 h-6 bg-gray-200 rounded-full relative">
-                <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-              <div className="flex items-center gap-3">
-                <Eye className="w-5 h-5 text-emerald-500" />
-                <div>
-                  <h4 className="text-sm font-bold">Read Receipts</h4>
-                  <p className="text-[10px] text-gray-400">Show others when you've seen their messages</p>
-                </div>
-              </div>
               <button 
                 onClick={async () => {
-                  const newValue = !profile?.read_receipts_enabled;
-                  await updateProfile({ read_receipts_enabled: newValue });
-                  toast.success(`Read receipts ${newValue ? 'enabled' : 'disabled'}`);
+                  const newValue = !profile?.is_private;
+                  await updateProfile({ is_private: newValue });
+                  toast.success(`Account is now ${newValue ? 'private' : 'public'}`);
                 }}
                 className={cn(
                   "w-12 h-6 rounded-full relative transition-colors",
-                  profile?.read_receipts_enabled ? "bg-emerald-500" : "bg-gray-200"
+                  profile?.is_private ? "bg-emerald-500" : "bg-gray-200"
                 )}
               >
                 <motion.div 
-                  animate={{ x: profile?.read_receipts_enabled ? 24 : 4 }}
+                  animate={{ x: profile?.is_private ? 24 : 4 }}
                   className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
                 />
               </button>

@@ -10,6 +10,7 @@ import { Zap, Clock, Loader2 } from 'lucide-react';
 import { getAIFeedRecommendations } from '../../services/aiFeedService';
 import { useAuth } from '../../lib/useAuth';
 import { cn } from '../../lib/utils';
+import SuggestedUsers from './SuggestedUsers';
 
 interface FeedProps {
   onUserClick: (userId: string) => void;
@@ -23,6 +24,7 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
   const [posts, setPosts] = useState<Post[]>([]);
   const [forYouPosts, setForYouPosts] = useState<Post[]>([]);
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [feedType, setFeedType] = useState<'latest' | 'forYou'>('latest');
   const [explanation, setExplanation] = useState('');
   const [loading, setLoading] = useState(true);
@@ -31,6 +33,7 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
 
   useEffect(() => {
     fetchBlockedIds();
+    fetchFollowingIds();
     fetchPosts();
 
     // Real-time subscription for new posts
@@ -63,6 +66,16 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
     }
   }
 
+  async function fetchFollowingIds() {
+    if (!user) return;
+    const { data } = await supabase
+      .from('connections')
+      .select('receiver_id')
+      .eq('sender_id', user.id)
+      .eq('status', 'accepted');
+    if (data) setFollowingIds(data.map(c => c.receiver_id));
+  }
+
   async function fetchPosts() {
     try {
       const { data, error } = await supabase
@@ -75,11 +88,21 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
 
       if (error) throw error;
       const fetchedPosts = data || [];
-      setPosts(fetchedPosts);
+      
+      // Filter based on privacy and blocks
+      const filtered = (fetchedPosts as any[]).filter(post => {
+        if (blockedIds.includes(post.user_id)) return false;
+        if (post.profiles?.is_private && post.user_id !== user?.id) {
+          return followingIds.includes(post.user_id);
+        }
+        return true;
+      });
+
+      setPosts(filtered);
       
       // Pre-fetch recommendations if not already done
-      if (fetchedPosts.length > 0) {
-        generateForYouFeed(fetchedPosts);
+      if (filtered.length > 0) {
+        generateForYouFeed(filtered);
       }
     } catch (error) {
       console.error('Error fetching posts:', error);
@@ -171,6 +194,11 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
       )}
       
       <div className="space-y-6">
+        {/* Mobile Suggested Users */}
+        <div className="lg:hidden">
+          <SuggestedUsers onUserClick={onUserClick} />
+        </div>
+
         {loading || (feedType === 'forYou' && forYouLoading) ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="card-premium h-64 animate-pulse bg-gray-50" />

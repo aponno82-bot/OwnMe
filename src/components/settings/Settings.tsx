@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../lib/useAuth';
 import { supabase } from '../../lib/supabase';
-import { User, Shield, Trash2, ChevronRight, Lock, Eye, Bell, Globe } from 'lucide-react';
+import { User, Shield, Trash2, ChevronRight, Lock, Eye, Bell, Globe, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
@@ -9,7 +9,44 @@ import { cn } from '../../lib/utils';
 export default function Settings() {
   const { user, profile, updateProfile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'main' | 'personal' | 'privacy' | 'delete'>('main');
+  const [activeSection, setActiveSection] = useState<'main' | 'personal' | 'privacy' | 'appearance' | 'delete'>('main');
+  const [fullName, setFullName] = useState(profile?.full_name || '');
+  const [username, setUsername] = useState(profile?.username || '');
+  const [bio, setBio] = useState(profile?.bio || '');
+  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('theme') === 'dark');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(localStorage.getItem('notifications') !== 'false');
+
+  const toggleTheme = () => {
+    const newTheme = !isDarkMode ? 'dark' : 'light';
+    setIsDarkMode(!isDarkMode);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.classList.toggle('dark', !isDarkMode);
+    toast.success(`Theme changed to ${newTheme} mode`);
+  };
+
+  const toggleNotifications = () => {
+    const newState = !notificationsEnabled;
+    setNotificationsEnabled(newState);
+    localStorage.setItem('notifications', String(newState));
+    toast.success(`Notifications ${newState ? 'enabled' : 'disabled'}`);
+  };
+
+  const handleSavePersonal = async () => {
+    setLoading(true);
+    try {
+      await updateProfile({
+        full_name: fullName,
+        username: username,
+        bio: bio
+      });
+      toast.success('Profile updated successfully');
+      setActiveSection('main');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDeleteRequest = async () => {
     const confirmed = window.confirm('Are you sure you want to request account deletion? This action cannot be undone.');
@@ -55,7 +92,8 @@ export default function Settings() {
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Full Name</label>
               <input 
                 type="text" 
-                defaultValue={profile?.full_name || ''}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
@@ -63,11 +101,91 @@ export default function Settings() {
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Username</label>
               <input 
                 type="text" 
-                defaultValue={profile?.username || ''}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
-            <button className="btn-primary w-full py-3 mt-4">Save Changes</button>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bio</label>
+              <textarea 
+                defaultValue={profile?.bio || ''}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+                placeholder="Tell us about yourself..."
+              />
+            </div>
+            <button 
+              onClick={handleSavePersonal}
+              disabled={loading}
+              className="btn-primary w-full py-3 mt-4 flex items-center justify-center gap-2"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeSection === 'appearance') {
+    return (
+      <div className="space-y-6">
+        <button onClick={() => setActiveSection('main')} className="text-sm font-bold text-emerald-600 hover:underline flex items-center gap-2">
+          ← Back to Settings
+        </button>
+        <div className="card-premium p-6">
+          <h2 className="text-xl font-bold mb-6">Appearance & Notifications</h2>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-500">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">Dark Mode</h4>
+                  <p className="text-[10px] text-gray-400">Toggle dark theme</p>
+                </div>
+              </div>
+              <button 
+                onClick={toggleTheme}
+                className={cn(
+                  "w-12 h-6 rounded-full relative transition-colors",
+                  isDarkMode ? "bg-emerald-500" : "bg-gray-200"
+                )}
+              >
+                <motion.div 
+                  animate={{ x: isDarkMode ? 24 : 4 }}
+                  className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">Notifications</h4>
+                  <p className="text-[10px] text-gray-400">Enable push notifications</p>
+                </div>
+              </div>
+              <button 
+                onClick={toggleNotifications}
+                className={cn(
+                  "w-12 h-6 rounded-full relative transition-colors",
+                  notificationsEnabled ? "bg-emerald-500" : "bg-gray-200"
+                )}
+              >
+                <motion.div 
+                  animate={{ x: notificationsEnabled ? 24 : 4 }}
+                  className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
+                />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -162,6 +280,22 @@ export default function Settings() {
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition-colors" />
+          </button>
+
+          <button 
+            onClick={() => setActiveSection('appearance')}
+            className="w-full flex items-center justify-between p-6 hover:bg-gray-50 transition-colors group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-500">
+                <Globe className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <h4 className="text-sm font-bold text-gray-900">Appearance</h4>
+                <p className="text-[10px] text-gray-400">Theme and notifications</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-purple-500 transition-colors" />
           </button>
 
           <button 

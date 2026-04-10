@@ -30,9 +30,6 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
-  const [incomingCall, setIncomingCall] = useState<{ from: Profile, type: 'audio' | 'video' } | null>(null);
-  const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended' | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
@@ -82,28 +79,14 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
           const currentActiveChat = activeChatRef.current;
           
           if (msg.receiver_id === user.id) {
-            // Handle Call Signaling
-            if (msg.media_type === 'call') {
-              if (msg.content === 'START_CALL') {
-                fetchCallerProfile(msg.sender_id, msg.media_url as 'audio' | 'video');
-                setCallStatus('ringing');
-                return;
-              } else if (msg.content === 'END_CALL') {
-                setCallStatus('ended');
-                setTimeout(() => {
-                  setIncomingCall(null);
-                  setIsCalling(null);
-                  setCallStatus(null);
-                }, 2000);
-                return;
-              } else if (msg.content === 'ACCEPT_CALL') {
-                setCallStatus('connected');
-                return;
-              }
-            }
+            // Handle Call Signaling - Now handled globally in App.tsx
+            if (msg.media_type === 'call') return;
 
             if (currentActiveChat && msg.sender_id === currentActiveChat.id) {
-              setMessages(prev => [...prev, msg]);
+              setMessages(prev => {
+                if (prev.some(m => m.id === msg.id)) return prev;
+                return [...prev, msg];
+              });
               markAsRead(msg.id);
             } else {
               fetchProfileForNotification(msg.sender_id, msg.content);
@@ -111,7 +94,10 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
             }
           } else if (msg.sender_id === user.id && currentActiveChat && msg.receiver_id === currentActiveChat.id) {
             // Message sent by me on another device
-            setMessages(prev => [...prev, msg]);
+            setMessages(prev => {
+              if (prev.some(m => m.id === msg.id)) return prev;
+              return [...prev, msg];
+            });
           }
         } else if (payload.eventType === 'UPDATE') {
           const updatedMsg = payload.new as Message;
@@ -159,13 +145,6 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         body: content,
         icon: data.avatar_url || '/favicon.ico'
       });
-    }
-  }
-
-  async function fetchCallerProfile(userId: string, type: 'audio' | 'video') {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (data) {
-      setIncomingCall({ from: data, type });
     }
   }
 
@@ -333,7 +312,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         console.error('Insert voice message error:', error);
         throw error;
       }
-      setMessages(prev => [...prev, data]);
+      // Removed optimistic update: setMessages(prev => [...prev, data]);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -386,7 +365,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         throw error;
       }
       
-      setMessages(prev => [...prev, data]);
+      // Removed optimistic update: setMessages(prev => [...prev, data]);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -411,7 +390,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       console.error('Send message error:', error);
       toast.error(`Failed to send message: ${error.message}`);
     } else {
-      setMessages(prev => [...prev, data]);
+      // Removed optimistic update: setMessages(prev => [...prev, data]);
       setNewMessage('');
       // Keep focus on input for mobile keyboard
       setTimeout(() => {
@@ -425,59 +404,16 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     }
   };
 
-  const [callDuration, setCallDuration] = useState(0);
-  const callTimerRef = useRef<any>(null);
-
   const startCall = async (type: 'audio' | 'video') => {
     if (!activeChat || !user) return;
-    setIsCalling(type);
-    setCallStatus('ringing');
     
-    // Send a signaling message
-    await supabase.from('messages').insert({
-      sender_id: user.id,
-      receiver_id: activeChat.id,
-      content: 'START_CALL',
-      media_type: 'call',
-      media_url: type,
-      is_read: false
-    });
+    // Dispatch global event
+    window.dispatchEvent(new CustomEvent('start-call', { 
+      detail: { contact: activeChat, type } 
+    }));
   };
 
-  const acceptCall = async () => {
-    if (!incomingCall || !user) return;
-    
-    await supabase.from('messages').insert({
-      sender_id: user.id,
-      receiver_id: incomingCall.from.id,
-      content: 'ACCEPT_CALL',
-      media_type: 'call',
-      is_read: false
-    });
-
-    setCallStatus('connected');
-    setIsCalling(incomingCall.type);
-  };
-
-  const endCall = async () => {
-    if (!user || (!activeChat && !incomingCall)) return;
-    const targetId = activeChat?.id || incomingCall?.from.id;
-    
-    await supabase.from('messages').insert({
-      sender_id: user.id,
-      receiver_id: targetId,
-      content: 'END_CALL',
-      media_type: 'call',
-      is_read: false
-    });
-
-    setCallStatus('ended');
-    setTimeout(() => {
-      setIsCalling(null);
-      setIncomingCall(null);
-      setCallStatus(null);
-    }, 2000);
-  };
+  // acceptCall and endCall removed as they are handled globally
 
   const renderMessageContent = (msg: Message) => {
     if (msg.media_type === 'image') {
@@ -522,20 +458,6 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   if (activeChat) {
     return (
       <div className="flex flex-col h-full bg-white lg:rounded-[32px] overflow-hidden border border-gray-100 shadow-premium relative">
-        {/* Call UI Overlays */}
-        <AnimatePresence>
-          {(isCalling || incomingCall) && (
-            <CallModal 
-              type={isCalling || incomingCall?.type || 'audio'}
-              status={callStatus || 'ringing'}
-              contact={incomingCall?.from || activeChat!}
-              isIncoming={!!incomingCall && !isCalling}
-              onEnd={endCall}
-              onAccept={acceptCall}
-            />
-          )}
-        </AnimatePresence>
-
         <div className="flex flex-col h-full relative">
           <div className="p-4 border-b border-gray-50 flex items-center justify-between glass sticky top-0 z-10">
             <div className="flex items-center gap-3">
@@ -867,18 +789,6 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         </div>
       </div>
       
-      <AnimatePresence>
-        {(isCalling || incomingCall) && (
-          <CallModal 
-            type={isCalling || incomingCall?.type || 'audio'}
-            status={callStatus || 'ringing'}
-            contact={incomingCall?.from || activeChat!}
-            isIncoming={!!incomingCall && !isCalling}
-            onEnd={endCall}
-            onAccept={acceptCall}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

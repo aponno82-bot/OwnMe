@@ -59,7 +59,10 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
       .single();
     
     if (data) {
-      setNotifications(prev => [data, ...prev]);
+      setNotifications(prev => {
+        if (prev.some(n => n.id === data.id)) return prev;
+        return [data, ...prev];
+      });
       sendBrowserNotification('New Notification', {
         body: getMessage(data),
         icon: data.profiles?.avatar_url || '/favicon.ico'

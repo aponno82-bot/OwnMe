@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAuth } from './lib/useAuth';
@@ -20,13 +20,134 @@ import Settings from './components/settings/Settings';
 import AdminPanel from './components/admin/AdminPanel';
 import TrendingHashtags from './components/explore/TrendingHashtags';
 import HashtagFeed from './components/explore/HashtagFeed';
+import CallModal from './components/messenger/CallModal';
 import { Users, Calendar } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import { Profile } from './types';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
+
+  // Global Call State
+  const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{ from: Profile; type: 'audio' | 'video' } | null>(null);
+  const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended' | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [activeCallContact, setActiveCallContact] = useState<Profile | null>(null);
+  const callTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`global-calls:${user.id}`)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages',
+        filter: `receiver_id=eq.${user.id}`
+      }, async (payload) => {
+        const msg = payload.new;
+        if (msg.media_type === 'call') {
+          if (msg.content === 'START_CALL') {
+            const { data: caller } = await supabase.from('profiles').select('*').eq('id', msg.sender_id).single();
+            if (caller) {
+              setIncomingCall({ from: caller, type: msg.media_url as 'audio' | 'video' });
+              setActiveCallContact(caller);
+              setCallStatus('ringing');
+            }
+          } else if (msg.content === 'END_CALL') {
+            setCallStatus('ended');
+            clearInterval(callTimerRef.current);
+            setTimeout(() => {
+              setIncomingCall(null);
+              setIsCalling(null);
+              setCallStatus(null);
+              setActiveCallContact(null);
+              setCallDuration(0);
+            }, 2000);
+          } else if (msg.content === 'ACCEPT_CALL') {
+            setCallStatus('connected');
+            setCallDuration(0);
+            clearInterval(callTimerRef.current);
+            callTimerRef.current = setInterval(() => {
+              setCallDuration(prev => prev + 1);
+            }, 1000);
+          }
+        }
+      })
+      .subscribe();
+
+    // Listen for local start-call events
+    const handleStartCall = (e: any) => {
+      const { contact, type } = e.detail;
+      setIsCalling(type);
+      setActiveCallContact(contact);
+      setCallStatus('ringing');
+      
+      supabase.from('messages').insert({
+        sender_id: user.id,
+        receiver_id: contact.id,
+        content: 'START_CALL',
+        media_type: 'call',
+        media_url: type,
+        is_read: false
+      });
+    };
+
+    window.addEventListener('start-call', handleStartCall);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('start-call', handleStartCall);
+      clearInterval(callTimerRef.current);
+    };
+  }, [user]);
+
+  const handleAcceptCall = async () => {
+    if (!incomingCall || !user) return;
+    
+    await supabase.from('messages').insert({
+      sender_id: user.id,
+      receiver_id: incomingCall.from.id,
+      content: 'ACCEPT_CALL',
+      media_type: 'call',
+      is_read: false
+    });
+
+    setCallStatus('connected');
+    setIsCalling(incomingCall.type);
+    setCallDuration(0);
+    clearInterval(callTimerRef.current);
+    callTimerRef.current = setInterval(() => {
+      setCallDuration(prev => prev + 1);
+    }, 1000);
+  };
+
+  const handleEndCall = async () => {
+    if (!user || !activeCallContact) return;
+    
+    await supabase.from('messages').insert({
+      sender_id: user.id,
+      receiver_id: activeCallContact.id,
+      content: 'END_CALL',
+      media_type: 'call',
+      is_read: false
+    });
+
+    setCallStatus('ended');
+    clearInterval(callTimerRef.current);
+    setTimeout(() => {
+      setIsCalling(null);
+      setIncomingCall(null);
+      setCallStatus(null);
+      setActiveCallContact(null);
+      setCallDuration(0);
+    }, 2000);
+  };
 
   const handleNotificationClick = async (notification: any) => {
     // Mark as read
@@ -176,6 +297,19 @@ export default function App() {
       {/* Mobile Bottom Nav */}
       <BottomNav onNavigate={handleNavigate} currentPage={currentPage} />
       
+      <AnimatePresence>
+        {(isCalling || incomingCall) && activeCallContact && (
+          <CallModal 
+            type={isCalling || incomingCall?.type || 'audio'}
+            status={callStatus || 'ringing'}
+            contact={activeCallContact}
+            isIncoming={!!incomingCall && !isCalling}
+            onEnd={handleEndCall}
+            onAccept={handleAcceptCall}
+          />
+        )}
+      </AnimatePresence>
+
       <Toaster position="top-right" richColors />
     </div>
   );

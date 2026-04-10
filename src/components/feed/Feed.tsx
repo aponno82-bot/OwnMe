@@ -135,7 +135,10 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
       .single();
     
     if (data) {
-      setPosts(prev => [data, ...prev]);
+      setPosts(prev => {
+        if (prev.some(p => p.id === data.id)) return prev;
+        return [data, ...prev];
+      });
     }
   }
 

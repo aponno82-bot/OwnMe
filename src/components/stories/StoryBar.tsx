@@ -239,9 +239,9 @@ export default function StoryBar() {
     const currentGroup = userStories[activeUserIndex];
     
     if (activeStoryIndex < currentGroup.stories.length - 1) {
-      setActiveStoryIndex(activeStoryIndex + 1);
+      setActiveStoryIndex(prev => prev + 1);
     } else if (activeUserIndex < userStories.length - 1) {
-      setActiveUserIndex(activeUserIndex + 1);
+      setActiveUserIndex(prev => prev! + 1);
       setActiveStoryIndex(0);
     } else {
       setActiveUserIndex(null);

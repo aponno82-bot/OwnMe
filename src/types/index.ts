@@ -92,6 +92,9 @@ export interface Message {
   delivered_at?: string | null;
   seen_at?: string | null;
   status?: 'sent' | 'delivered' | 'seen' | 'request';
+  reply_to_id?: string | null;
+  reply_to_message?: Message | null;
+  reactions?: { [emoji: string]: string[] }; // emoji -> list of user_ids
 }
 
 export interface Group {

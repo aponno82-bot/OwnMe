@@ -36,6 +36,14 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   const [isBlocked, setIsBlocked] = useState(false);
   const [isBlockingMe, setIsBlockingMe] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const typingTimeoutRef = useRef<any>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isSearchingChat, setIsSearchingChat] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,12 +112,73 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
           setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
         }
       })
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const typing: string[] = [];
+        Object.keys(state).forEach(key => {
+          const presences = state[key] as any[];
+          presences.forEach(p => {
+            if (p.isTyping && p.typingTo === user.id) {
+              typing.push(p.userId);
+            }
+          });
+        });
+        setTypingUsers(typing);
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
+
+  // Handle typing indicator
+  useEffect(() => {
+    if (!user || !activeChat) return;
+
+    const channel = supabase.channel(`typing:${activeChat.id}`);
+    
+    const trackTyping = async () => {
+      await channel.track({
+        userId: user.id,
+        isTyping: isTyping,
+        typingTo: activeChat.id
+      });
+    };
+
+    trackTyping();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [isTyping, activeChat, user]);
+
+  const handleTyping = () => {
+    if (!isTyping) setIsTyping(true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+    }, 3000);
+  };
+
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      setShowScrollBottom(scrollHeight - scrollTop - clientHeight > 300);
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
 
   async function fetchConnections() {
     if (!user) return;
@@ -150,7 +219,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
 
   async function markAsRead(messageId: string) {
     await supabase.from('messages').update({ 
-      is_read: true
+      is_read: true,
+      seen_at: new Date().toISOString()
     }).eq('id', messageId);
   }
 
@@ -234,7 +304,20 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${contactId}),and(sender_id.eq.${contactId},receiver_id.eq.${user?.id})`)
       .order('created_at', { ascending: true });
     
-    if (data) setMessages(data);
+    if (data) {
+      setMessages(data);
+      // Mark unread messages from this contact as read
+      const unreadIds = data
+        .filter(m => m.receiver_id === user?.id && !m.is_read)
+        .map(m => m.id);
+      
+      if (unreadIds.length > 0) {
+        await supabase
+          .from('messages')
+          .update({ is_read: true, seen_at: new Date().toISOString() })
+          .in('id', unreadIds);
+      }
+    }
   }
 
   const [isRecording, setIsRecording] = useState(false);
@@ -383,6 +466,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       sender_id: user.id,
       receiver_id: activeChat.id,
       content: newMessage.trim(),
+      reply_to_id: replyingTo?.id || null
     };
 
     const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
@@ -392,6 +476,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     } else {
       // Removed optimistic update: setMessages(prev => [...prev, data]);
       setNewMessage('');
+      setReplyingTo(null);
+      setIsTyping(false);
       // Keep focus on input for mobile keyboard
       setTimeout(() => {
         messageInputRef.current?.focus();
@@ -414,6 +500,39 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   };
 
   // acceptCall and endCall removed as they are handled globally
+
+  const handleReact = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+
+    const currentReactions = message.reactions || {};
+    const userIds = currentReactions[emoji] || [];
+    
+    let newUserIds;
+    if (userIds.includes(user.id)) {
+      newUserIds = userIds.filter(id => id !== user.id);
+    } else {
+      newUserIds = [...userIds, user.id];
+    }
+
+    const updatedReactions = { ...currentReactions };
+    if (newUserIds.length === 0) {
+      delete updatedReactions[emoji];
+    } else {
+      updatedReactions[emoji] = newUserIds;
+    }
+
+    const { error } = await supabase
+      .from('messages')
+      .update({ reactions: updatedReactions })
+      .eq('id', messageId);
+
+    if (error) {
+      toast.error('Failed to react');
+    }
+  };
 
   const renderMessageContent = (msg: Message) => {
     if (msg.media_type === 'image') {
@@ -457,42 +576,64 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
 
   if (activeChat) {
     return (
-      <div className="flex flex-col h-full bg-white lg:rounded-[32px] overflow-hidden border border-gray-100 shadow-premium relative">
+      <div className="flex flex-col h-full bg-white lg:rounded-[32px] overflow-hidden border border-gray-100 shadow-premium relative h-[100svh] lg:h-full">
         <div className="flex flex-col h-full relative">
-          <div className="p-4 border-b border-gray-50 flex items-center justify-between glass sticky top-0 z-10">
+          <div className="p-4 border-b border-gray-50 flex items-center justify-between glass sticky top-0 z-10 shrink-0">
             <div className="flex items-center gap-3">
               <button onClick={() => setActiveChat(null)} className="p-2 hover:bg-gray-50 rounded-full text-gray-500 transition-colors">
                 <ChevronLeft className="w-6 h-6" />
               </button>
-              <div 
-                className="flex items-center gap-3 cursor-pointer group"
-                onClick={() => onUserClick?.(activeChat.id)}
-              >
-                <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden border border-gray-100 group-hover:border-emerald-500 transition-all">
-                  {activeChat.avatar_url ? (
-                    <img src={activeChat.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
-                      {activeChat.username[0].toUpperCase()}
-                    </div>
-                  )}
+              {isSearchingChat ? (
+                <div className="flex items-center gap-2">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input 
+                    autoFocus
+                    type="text"
+                    placeholder="Search in chat..."
+                    value={chatSearchQuery}
+                    onChange={(e) => setChatSearchQuery(e.target.value)}
+                    className="bg-gray-50 border-none rounded-xl px-3 py-1.5 text-sm outline-none w-32 lg:w-48"
+                  />
+                  <button onClick={() => { setIsSearchingChat(false); setChatSearchQuery(''); }} className="p-1 text-gray-400">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 group-hover:text-emerald-600 transition-colors flex items-center gap-1">
-                    {activeChat.full_name || activeChat.username}
-                    {activeChat.is_verified && <VerificationBadge size="sm" />}
-                  </h4>
-                  <p className={cn(
-                    "text-[10px] font-bold uppercase tracking-wider",
-                    (isUserOnline(activeChat.id) && isMutualFollow(activeChat.id)) ? "text-emerald-500" : "text-gray-400"
-                  )}>
-                    {(isUserOnline(activeChat.id) && isMutualFollow(activeChat.id)) ? 'Online' : 'Offline'}
-                  </p>
+              ) : (
+                <div 
+                  className="flex items-center gap-3 cursor-pointer group"
+                  onClick={() => onUserClick?.(activeChat.id)}
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden border border-gray-100 group-hover:border-emerald-500 transition-all">
+                    {activeChat.avatar_url ? (
+                      <img src={activeChat.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
+                        {activeChat.username[0].toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 group-hover:text-emerald-600 transition-colors flex items-center gap-1">
+                      {activeChat.full_name || activeChat.username}
+                      {activeChat.is_verified && <VerificationBadge size="sm" />}
+                    </h4>
+                    <p className={cn(
+                      "text-[10px] font-bold uppercase tracking-wider",
+                      (isUserOnline(activeChat.id) && isMutualFollow(activeChat.id)) ? "text-emerald-500" : "text-gray-400"
+                    )}>
+                      {(isUserOnline(activeChat.id) && isMutualFollow(activeChat.id)) ? 'Online' : 'Offline'}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex items-center gap-1">
+              {!isSearchingChat && (
+                <button onClick={() => setIsSearchingChat(true)} className="p-2 hover:bg-gray-50 text-gray-500 rounded-xl transition-colors">
+                  <Search className="w-5 h-5" />
+                </button>
+              )}
               <button onClick={() => startCall('audio')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-xl transition-colors">
                 <Phone className="w-5 h-5" />
               </button>
@@ -526,6 +667,28 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                         Mute Notifications
                       </button>
                       <button 
+                        onClick={async () => {
+                          if (confirm('Are you sure you want to clear this chat?')) {
+                            const { error } = await supabase
+                              .from('messages')
+                              .delete()
+                              .or(`and(sender_id.eq.${user?.id},receiver_id.eq.${activeChat.id}),and(sender_id.eq.${activeChat.id},receiver_id.eq.${user?.id})`);
+                            
+                            if (error) {
+                              toast.error('Failed to clear chat');
+                            } else {
+                              setMessages([]);
+                              toast.success('Chat cleared');
+                            }
+                          }
+                          setIsHeaderMenuOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Clear Chat
+                      </button>
+                      <button 
                         onClick={() => {
                           toast.error('User blocked');
                           setIsHeaderMenuOpen(false);
@@ -542,7 +705,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
             </div>
           </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar bg-gray-50/30">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar bg-gray-50/30 relative">
             {isBlocked || isBlockingMe ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8">
                 <ShieldAlert className="w-12 h-12 text-gray-300 mb-4" />
@@ -555,16 +718,90 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
               </div>
             ) : (
               <>
-                {messages.map((msg) => (
+                {messages
+                  .filter(m => m.content.toLowerCase().includes(chatSearchQuery.toLowerCase()))
+                  .map((msg) => (
                   <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
                     <div className="flex flex-col gap-1 max-w-[80%]">
-                      <div className={cn(
-                        "p-3 rounded-2xl text-sm shadow-sm relative group/msg",
-                        msg.sender_id === user?.id 
-                          ? 'bg-emerald-500 text-white rounded-tr-none' 
-                          : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
-                      )}>
-                        {renderMessageContent(msg)}
+                      {msg.reply_to_id && (
+                        <div className={cn(
+                          "text-[10px] px-3 py-1 bg-gray-100 rounded-t-xl border-l-2 border-emerald-500 text-gray-500 truncate",
+                          msg.sender_id === user?.id ? "mr-2" : "ml-2"
+                        )}>
+                          Replying to: {messages.find(m => m.id === msg.reply_to_id)?.content || 'Media'}
+                        </div>
+                      )}
+                      <div className="relative group/msg">
+                        <div className={cn(
+                          "p-3 rounded-2xl text-sm shadow-sm relative",
+                          msg.sender_id === user?.id 
+                            ? 'bg-emerald-500 text-white rounded-tr-none' 
+                            : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
+                        )}>
+                          {renderMessageContent(msg)}
+                          
+                          {/* Reactions Display */}
+                          {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                            <div className={cn(
+                              "absolute -bottom-2 flex gap-1",
+                              msg.sender_id === user?.id ? "right-0" : "left-0"
+                            )}>
+                              {Object.entries(msg.reactions).map(([emoji, uids]) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => handleReact(msg.id, emoji)}
+                                  className="bg-white border border-gray-100 rounded-full px-1.5 py-0.5 text-[10px] shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-1"
+                                >
+                                  <span>{emoji}</span>
+                                  <span className="font-bold text-gray-500">{(uids as string[]).length}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Message Actions (Hover) */}
+                        <div className={cn(
+                          "absolute top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity z-10",
+                          msg.sender_id === user?.id ? "-left-24" : "-right-24"
+                        )}>
+                          <button 
+                            onClick={() => setReplyingTo(msg)}
+                            className="p-1.5 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-emerald-500 shadow-sm"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                          {msg.sender_id === user?.id && (
+                            <button 
+                              onClick={async () => {
+                                if (confirm('Delete this message?')) {
+                                  const { error } = await supabase.from('messages').delete().eq('id', msg.id);
+                                  if (error) toast.error('Failed to delete');
+                                  else setMessages(prev => prev.filter(m => m.id !== msg.id));
+                                }
+                              }}
+                              className="p-1.5 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-rose-500 shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <div className="relative group/reactions">
+                            <button className="p-1.5 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-rose-500 shadow-sm">
+                              <Smile className="w-3.5 h-3.5" />
+                            </button>
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white border border-gray-100 rounded-full px-2 py-1 shadow-xl flex gap-1 opacity-0 group-hover/reactions:opacity-100 transition-all pointer-events-none group-hover/reactions:pointer-events-auto">
+                              {['❤️', '🔥', '😂', '😮', '😢', '👏'].map(emoji => (
+                                <button 
+                                  key={emoji}
+                                  onClick={() => handleReact(msg.id, emoji)}
+                                  className="hover:scale-125 transition-transform p-1"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <div className={cn(
                         "flex items-center gap-1.5",
@@ -574,9 +811,12 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                           {formatDate(msg.created_at)}
                         </span>
                         {msg.sender_id === user?.id && (
-                          <div className="flex items-center">
+                          <div className="flex items-center gap-1">
                             {msg.is_read ? (
-                              <CheckCheck className="w-3 h-3 text-blue-400" />
+                              <>
+                                <span className="text-[8px] font-bold text-blue-400 uppercase">Seen</span>
+                                <CheckCheck className="w-3 h-3 text-blue-400" />
+                              </>
                             ) : msg.is_delivered ? (
                               <CheckCheck className="w-3 h-3 text-gray-300" />
                             ) : (
@@ -588,6 +828,20 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                     </div>
                   </div>
                 ))}
+                {typingUsers.length > 0 && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-gray-100 p-3 rounded-2xl rounded-tl-none flex items-center gap-2 shadow-sm">
+                      <div className="flex gap-1">
+                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        {activeChat.full_name || activeChat.username} is typing...
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {uploading && (
                   <div className="flex justify-end">
                     <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl rounded-tr-none flex items-center gap-2">
@@ -598,75 +852,143 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                 )}
               </>
             )}
+            
+            <AnimatePresence>
+              {showScrollBottom && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                  onClick={scrollToBottom}
+                  className="absolute bottom-4 right-4 p-3 bg-white border border-gray-100 rounded-full shadow-lg text-emerald-500 hover:bg-gray-50 transition-all z-20"
+                >
+                  <ChevronLeft className="w-5 h-5 -rotate-90" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
 
           {!isBlocked && !isBlockingMe && (
-            <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-50 glass shrink-0">
-            <div className="flex items-center gap-2">
-              {isRecording ? (
-                <div className="flex-1 flex items-center gap-4 px-4 py-2 bg-rose-50 rounded-2xl">
-                  <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-bold text-rose-600 flex-1">Recording... {formatDuration(recordingDuration)}</span>
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setIsRecording(false);
-                      clearInterval(timerRef.current);
-                      mediaRecorderRef.current?.stop();
-                      audioChunksRef.current = [];
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={stopRecording}
-                    className="p-3 bg-rose-500 text-white rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95"
-                  >
-                    <Send className="w-5 h-5" />
+            <div className="shrink-0">
+              {replyingTo && (
+                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="w-1 h-8 bg-emerald-500 rounded-full shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Replying to</p>
+                      <p className="text-xs text-gray-500 truncate">{replyingTo.content || 'Media'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setReplyingTo(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
-              ) : (
-                <>
-                  <button 
-                    type="button" 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-3 hover:bg-gray-50 text-gray-400 rounded-2xl transition-all active:scale-90"
-                  >
-                    <Paperclip className="w-5 h-5" />
-                  </button>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileUpload} 
-                    className="hidden" 
-                  />
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      ref={messageInputRef}
-                      placeholder="Type a message..."
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      className="w-full pl-6 pr-12 py-4 bg-gray-50 border-none rounded-[24px] text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                    />
-                    <button type="submit" disabled={!newMessage.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 text-emerald-500 hover:bg-emerald-50 rounded-2xl transition-all disabled:opacity-50 active:scale-90">
-                      <Send className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={startRecording}
-                    className="p-3 hover:bg-gray-50 text-gray-400 rounded-2xl transition-all active:scale-90"
-                  >
-                    <Mic className="w-5 h-5" />
-                  </button>
-                </>
               )}
+              
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-50 glass">
+                <div className="flex items-center gap-2">
+                  {isRecording ? (
+                    <div className="flex-1 flex items-center gap-4 px-4 py-2 bg-rose-50 rounded-2xl">
+                      <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+                      <span className="text-sm font-bold text-rose-600 flex-1">Recording... {formatDuration(recordingDuration)}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setIsRecording(false);
+                          clearInterval(timerRef.current);
+                          mediaRecorderRef.current?.stop();
+                          audioChunksRef.current = [];
+                        }}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={stopRecording}
+                        className="p-3 bg-rose-500 text-white rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95"
+                      >
+                        <Send className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          type="button" 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-2.5 hover:bg-gray-50 text-gray-400 rounded-xl transition-all active:scale-90"
+                        >
+                          <Paperclip className="w-5 h-5" />
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                          className={cn(
+                            "p-2.5 hover:bg-gray-50 rounded-xl transition-all active:scale-90",
+                            showEmojiPicker ? "text-emerald-500 bg-emerald-50" : "text-gray-400"
+                          )}
+                        >
+                          <Smile className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileUpload} 
+                        className="hidden" 
+                      />
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          ref={messageInputRef}
+                          placeholder="Type a message..."
+                          value={newMessage}
+                          onChange={(e) => {
+                            setNewMessage(e.target.value);
+                            handleTyping();
+                          }}
+                          className="w-full pl-6 pr-12 py-3.5 bg-gray-50 border-none rounded-[24px] text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                        />
+                        <button 
+                          type="submit" 
+                          disabled={!newMessage.trim()} 
+                          className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all disabled:opacity-50 active:scale-90"
+                        >
+                          <Send className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={startRecording}
+                        className="p-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                      >
+                        <Mic className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                {showEmojiPicker && (
+                  <div className="mt-4 flex flex-wrap gap-2 p-2 bg-gray-50 rounded-2xl border border-gray-100">
+                    {['❤️', '🔥', '😂', '😮', '😢', '👏', '👍', '🙏', '✨', '🎉', '💯', '🚀'].map(emoji => (
+                      <button 
+                        key={emoji}
+                        onClick={() => {
+                          setNewMessage(prev => prev + emoji);
+                          setShowEmojiPicker(false);
+                          messageInputRef.current?.focus();
+                        }}
+                        className="text-xl p-2 hover:bg-white rounded-xl transition-all active:scale-90"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </form>
             </div>
-          </form>
-        )}
+          )}
       </div>
     </div>
   );

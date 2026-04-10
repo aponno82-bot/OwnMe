@@ -24,6 +24,7 @@ import CallModal from './components/messenger/CallModal';
 import { Users, Calendar } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { Profile } from './types';
+import { cn } from './lib/utils';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
@@ -230,11 +231,16 @@ export default function App() {
     );
   }
 
+  const isMessengerPage = currentPage === 'messages';
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
+      {!isMessengerPage && <Navbar onNavigate={handleNavigate} currentPage={currentPage} />}
       
-      <main className="flex-1 container mx-auto px-4 py-6 lg:py-8 mt-[72px] mb-[80px] lg:mb-0">
+      <main className={cn(
+        "flex-1 container mx-auto px-4 py-6 lg:py-8 lg:mb-0",
+        !isMessengerPage ? "mt-[72px] mb-[80px]" : "mt-0 mb-0 lg:mt-[72px]"
+      )}>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Sidebar - Navigation */}
           <aside className="hidden lg:block lg:col-span-3 sticky top-24 h-[calc(100vh-120px)]">
@@ -295,7 +301,7 @@ export default function App() {
       </main>
 
       {/* Mobile Bottom Nav */}
-      <BottomNav onNavigate={handleNavigate} currentPage={currentPage} />
+      {!isMessengerPage && <BottomNav onNavigate={handleNavigate} currentPage={currentPage} />}
       
       <AnimatePresence>
         {(isCalling || incomingCall) && activeCallContact && (
@@ -345,7 +351,7 @@ function ProfilePageWrapper({ onNavigate }: { onNavigate: (page: string, id?: st
 function MessengerWrapper({ onUserClick }: { onUserClick: (userId: string) => void }) {
   const { contactId } = useParams();
   return (
-    <div className="fixed inset-0 top-[72px] bottom-[80px] lg:static lg:h-[calc(100vh-120px)] z-40 bg-white">
+    <div className="fixed inset-0 lg:static lg:h-[calc(100vh-120px)] z-40 bg-white">
       <Messenger 
         initialContactId={contactId} 
         onUserClick={onUserClick}

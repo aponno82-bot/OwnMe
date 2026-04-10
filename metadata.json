@@ -1,8 +1,5 @@
 {
   "name": "OwnMe",
   "description": "A high-end minimalist social media platform for connecting with friends, sharing stories, and real-time communication.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
+
 }

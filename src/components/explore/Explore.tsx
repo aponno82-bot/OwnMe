@@ -55,7 +55,7 @@ function UserCard({ profile, onUserClick }: UserCardProps) {
   );
 }
 
-export default function Explore({ onUserClick, onHashtagClick }: { onUserClick: (id: string) => void, onHashtagClick: (tag: string) => void }) {
+export default function Explore({ onUserClick, onHashtagClick, onPostClick }: { onUserClick: (id: string) => void, onHashtagClick: (tag: string) => void, onPostClick: (id: string) => void }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [trendingPosts, setTrendingPosts] = useState<Post[]>([]);
   const [search, setSearch] = useState('');
@@ -159,6 +159,7 @@ export default function Explore({ onUserClick, onHashtagClick }: { onUserClick: 
                 post={post} 
                 onUserClick={onUserClick}
                 onHashtagClick={onHashtagClick}
+                onPostClick={onPostClick}
               />
             ))
           )}

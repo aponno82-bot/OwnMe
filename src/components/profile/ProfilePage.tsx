@@ -623,6 +623,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                   key={post.id} 
                   post={post} 
                   onHashtagClick={(tag) => onNavigate?.('hashtag', tag)}
+                  onPostClick={(id) => onNavigate?.('post', id)}
                 />
               ))
           )}
@@ -673,106 +674,6 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                         onClick={() => {
                           setShowConnectionsModal(null);
                           onNavigate?.('profile', p.id);
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
-                            {p.avatar_url ? (
-                              <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
-                                {p.username[0].toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">{p.full_name || p.username}</h4>
-                            <p className="text-[10px] text-gray-400 font-medium">@{p.username}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <p className="text-gray-400 font-medium">No {showConnectionsModal} yet</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-
-      {/* Content Grid */}
-      {!isBlocked && !isBlockingMe && (
-        <div className="space-y-6">
-          {loading ? (
-            <div className="card-premium h-64 animate-pulse bg-gray-50" />
-          ) : (
-            (activeTab === 'likes' ? likedPosts : posts)
-              .filter(post => {
-                if (activeTab === 'posts') return true;
-                if (activeTab === 'media') return !!post.media_url;
-                if (activeTab === 'likes') return true;
-                return true;
-              })
-              .map((post: Post) => (
-                <PostCard 
-                  key={post.id} 
-                  post={post} 
-                  onHashtagClick={(tag) => onNavigate('hashtag', tag)}
-                />
-              ))
-          )}
-          {!loading && (activeTab === 'likes' ? likedPosts : posts).length === 0 && (
-            <div className="text-center py-20 card-premium">
-              <h3 className="text-xl font-bold text-gray-400">No posts yet</h3>
-              <p className="text-gray-500 mt-2">Share your first update with the community!</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Connections Modal */}
-      <AnimatePresence>
-        {showConnectionsModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowConnectionsModal(null)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-white rounded-[32px] shadow-2xl overflow-hidden"
-            >
-              <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-                <h2 className="text-xl font-bold capitalize">{showConnectionsModal}</h2>
-                <button onClick={() => setShowConnectionsModal(null)} className="p-2 hover:bg-gray-50 rounded-full">
-                  <X className="w-5 h-5 text-gray-400" />
-                </button>
-              </div>
-
-              <div className="p-4 max-h-[60vh] overflow-y-auto no-scrollbar">
-                {connectionsLoading ? (
-                  <div className="flex justify-center py-8">
-                    <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : connectionsList.length > 0 ? (
-                  <div className="space-y-2">
-                    {connectionsList.map((p) => (
-                      <div 
-                        key={p.id} 
-                        className="flex items-center justify-between p-3 rounded-2xl hover:bg-gray-50 transition-all cursor-pointer group"
-                        onClick={() => {
-                          setShowConnectionsModal(null);
-                          // We need a way to navigate here, but for now we just close
                         }}
                       >
                         <div className="flex items-center gap-3">

@@ -14,9 +14,10 @@ interface PostCardProps {
   key?: string | number;
   onUserClick?: (userId: string) => void;
   onHashtagClick?: (hashtag: string) => void;
+  onPostClick?: (postId: string) => void;
 }
 
-export default function PostCard({ post, onUserClick, onHashtagClick }: PostCardProps) {
+export default function PostCard({ post, onUserClick, onHashtagClick, onPostClick }: PostCardProps) {
   const { user, profile } = useAuth();
   const [likesCount, setLikesCount] = useState(post.reactions_count || 0);
   const [commentsCount, setCommentsCount] = useState(post.comments_count || 0);
@@ -757,7 +758,10 @@ export default function PostCard({ post, onUserClick, onHashtagClick }: PostCard
       </AnimatePresence>
 
       {/* Content */}
-      <div className="space-y-4">
+      <div 
+        className="space-y-4 cursor-pointer"
+        onClick={() => onPostClick?.(post.id)}
+      >
         <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
           {post.content.split(/(#[a-z0-9_]+)/gi).map((part, i) => {
             if (part.startsWith('#')) {

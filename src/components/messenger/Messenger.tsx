@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX } from 'lucide-react';
+import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Message, Profile } from '../../types';
@@ -10,6 +10,8 @@ import VerificationBadge from '../VerificationBadge';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendBrowserNotification } from '../../lib/notifications';
 import { createNotification } from '../../services/notificationService';
+import VoicePlayer from './VoicePlayer';
+import VideoPlayer from './VideoPlayer';
 
 interface MessengerProps {
   initialContactId?: string | null;
@@ -66,26 +68,34 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     const channel = supabase
       .channel(`messages:${user.id}:${instanceId.current}`)
       .on('postgres_changes', { 
-        event: 'INSERT', 
+        event: '*', 
         schema: 'public', 
-        table: 'messages',
-        filter: `receiver_id=eq.${user.id}` 
+        table: 'messages'
       }, (payload) => {
-        const msg = payload.new as Message;
-        const currentActiveChat = activeChatRef.current;
-        
-        if (msg.media_type === 'call' && msg.content === 'START_CALL') {
-          fetchCallerProfile(msg.sender_id, msg.media_url as 'audio' | 'video');
-          return;
-        }
+        if (payload.eventType === 'INSERT') {
+          const msg = payload.new as Message;
+          const currentActiveChat = activeChatRef.current;
+          
+          if (msg.receiver_id === user.id) {
+            if (msg.media_type === 'call' && msg.content === 'START_CALL') {
+              fetchCallerProfile(msg.sender_id, msg.media_url as 'audio' | 'video');
+              return;
+            }
 
-        if (currentActiveChat && msg.sender_id === currentActiveChat.id) {
-          setMessages(prev => [...prev, msg]);
-          markAsRead(msg.id);
-        } else {
-          // Send browser notification
-          fetchProfileForNotification(msg.sender_id, msg.content);
-          toast.info(`New message from someone`);
+            if (currentActiveChat && msg.sender_id === currentActiveChat.id) {
+              setMessages(prev => [...prev, msg]);
+              markAsRead(msg.id);
+            } else {
+              fetchProfileForNotification(msg.sender_id, msg.content);
+              toast.info(`New message from someone`);
+            }
+          } else if (msg.sender_id === user.id && currentActiveChat && msg.receiver_id === currentActiveChat.id) {
+            // Message sent by me on another device
+            setMessages(prev => [...prev, msg]);
+          }
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedMsg = payload.new as Message;
+          setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
         }
       })
       .subscribe();
@@ -123,7 +133,11 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   }
 
   async function markAsRead(messageId: string) {
-    await supabase.from('messages').update({ is_read: true }).eq('id', messageId);
+    if (profile?.read_receipts_enabled === false) return;
+    await supabase.from('messages').update({ 
+      is_read: true,
+      seen_at: new Date().toISOString()
+    }).eq('id', messageId);
   }
 
   useEffect(() => {
@@ -277,6 +291,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         content: 'Voice message',
         media_url: publicUrl,
         media_type: 'audio' as const,
+        is_delivered: isUserOnline(activeChat.id),
+        delivered_at: isUserOnline(activeChat.id) ? new Date().toISOString() : null
       };
 
       const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
@@ -326,6 +342,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
         content: file.name,
         media_url: publicUrl,
         media_type: mediaType,
+        is_delivered: isUserOnline(activeChat.id),
+        delivered_at: isUserOnline(activeChat.id) ? new Date().toISOString() : null
       };
 
       const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
@@ -347,6 +365,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       sender_id: user.id,
       receiver_id: activeChat.id,
       content: newMessage.trim(),
+      is_delivered: isUserOnline(activeChat.id),
+      delivered_at: isUserOnline(activeChat.id) ? new Date().toISOString() : null
     };
 
     const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
@@ -413,7 +433,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     }
     if (msg.media_type === 'video') {
       return (
-        <video src={msg.media_url!} controls className="rounded-lg max-w-full h-auto" />
+        <VideoPlayer url={msg.media_url!} />
       );
     }
     if (msg.media_type === 'document') {
@@ -436,12 +456,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
     }
     if (msg.media_type === 'audio') {
       return (
-        <div className="flex items-center gap-3 py-1 min-w-[200px]">
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-            <Mic className="w-4 h-4" />
-          </div>
-          <audio src={msg.media_url!} controls className="h-8 flex-1" />
-        </div>
+        <VoicePlayer url={msg.media_url!} isOwn={msg.sender_id === user?.id} />
       );
     }
     return msg.content;
@@ -612,19 +627,32 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                   <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
                     <div className="flex flex-col gap-1 max-w-[80%]">
                       <div className={cn(
-                        "p-3 rounded-2xl text-sm shadow-sm",
+                        "p-3 rounded-2xl text-sm shadow-sm relative group/msg",
                         msg.sender_id === user?.id 
                           ? 'bg-emerald-500 text-white rounded-tr-none' 
                           : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
                       )}>
                         {renderMessageContent(msg)}
                       </div>
-                      <span className={cn(
-                        "text-[9px] font-medium",
-                        msg.sender_id === user?.id ? "text-right text-gray-400" : "text-left text-gray-400"
+                      <div className={cn(
+                        "flex items-center gap-1.5",
+                        msg.sender_id === user?.id ? "justify-end" : "justify-start"
                       )}>
-                        {formatDate(msg.created_at)}
-                      </span>
+                        <span className="text-[9px] font-medium text-gray-400">
+                          {formatDate(msg.created_at)}
+                        </span>
+                        {msg.sender_id === user?.id && (
+                          <div className="flex items-center">
+                            {msg.is_read ? (
+                              <CheckCheck className="w-3 h-3 text-blue-400" />
+                            ) : msg.is_delivered ? (
+                              <CheckCheck className="w-3 h-3 text-gray-300" />
+                            ) : (
+                              <Check className="w-3 h-3 text-gray-300" />
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

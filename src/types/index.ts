@@ -12,6 +12,7 @@ export interface Profile {
   updated_at?: string;
   is_verified?: boolean;
   role?: 'admin' | 'user';
+  read_receipts_enabled?: boolean;
 }
 
 export interface Post {
@@ -86,6 +87,9 @@ export interface Message {
   call_duration?: number | null;
   created_at: string;
   is_read: boolean;
+  is_delivered?: boolean;
+  delivered_at?: string | null;
+  seen_at?: string | null;
 }
 
 export interface Group {

@@ -14,10 +14,11 @@ import { cn } from '../../lib/utils';
 interface FeedProps {
   onUserClick: (userId: string) => void;
   onHashtagClick: (hashtag: string) => void;
+  onPostClick: (postId: string) => void;
   highlightPostId?: string | null;
 }
 
-export default function Feed({ onUserClick, onHashtagClick, highlightPostId }: FeedProps) {
+export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlightPostId }: FeedProps) {
   const { profile, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [forYouPosts, setForYouPosts] = useState<Post[]>([]);
@@ -191,6 +192,7 @@ export default function Feed({ onUserClick, onHashtagClick, highlightPostId }: F
                   post={post} 
                   onUserClick={onUserClick} 
                   onHashtagClick={onHashtagClick}
+                  onPostClick={onPostClick}
                 />
               </motion.div>
             ))}

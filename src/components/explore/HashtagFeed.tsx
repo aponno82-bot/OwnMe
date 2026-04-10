@@ -10,9 +10,10 @@ interface HashtagFeedProps {
   onBack: () => void;
   onUserClick: (userId: string) => void;
   onHashtagClick: (hashtag: string) => void;
+  onPostClick: (postId: string) => void;
 }
 
-export default function HashtagFeed({ hashtag, onBack, onUserClick, onHashtagClick }: HashtagFeedProps) {
+export default function HashtagFeed({ hashtag, onBack, onUserClick, onHashtagClick, onPostClick }: HashtagFeedProps) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -89,6 +90,7 @@ export default function HashtagFeed({ hashtag, onBack, onUserClick, onHashtagCli
                   post={post} 
                   onUserClick={onUserClick}
                   onHashtagClick={onHashtagClick}
+                  onPostClick={onPostClick}
                 />
               </motion.div>
             ))}

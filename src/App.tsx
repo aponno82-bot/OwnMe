@@ -18,13 +18,15 @@ import Settings from './components/settings/Settings';
 import AdminPanel from './components/admin/AdminPanel';
 import TrendingHashtags from './components/explore/TrendingHashtags';
 import HashtagFeed from './components/explore/HashtagFeed';
+import PostPage from './components/feed/PostPage';
 import { Users, Calendar } from 'lucide-react';
 import { requestNotificationPermission } from './lib/notifications';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
-  const [currentPage, setCurrentPage] = useState<'feed' | 'profile' | 'explore' | 'notifications' | 'messages' | 'reels' | 'hashtag' | 'groups' | 'events' | 'settings' | 'admin'>('feed');
+  const [currentPage, setCurrentPage] = useState<'feed' | 'profile' | 'explore' | 'notifications' | 'messages' | 'reels' | 'hashtag' | 'groups' | 'events' | 'settings' | 'admin' | 'post'>('feed');
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
+  const [viewingPostId, setViewingPostId] = useState<string | null>(null);
   const [activeHashtag, setActiveHashtag] = useState<string | null>(null);
   const [activeChatUserId, setActiveChatUserId] = useState<string | null>(null);
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
@@ -38,8 +40,7 @@ export default function App() {
     } else if (notification.type === 'follow') {
       handleNavigate('profile', notification.actor_id);
     } else if (notification.post_id) {
-      setHighlightPostId(notification.post_id);
-      handleNavigate('feed');
+      handleNavigate('post', notification.post_id);
     }
   };
 
@@ -65,10 +66,13 @@ export default function App() {
       setActiveHashtag(id || null);
     } else if (page === 'messages') {
       setActiveChatUserId(id || null);
+    } else if (page === 'post') {
+      setViewingPostId(id || null);
     } else {
       setViewingUserId(null);
       setActiveHashtag(null);
       setActiveChatUserId(null);
+      setViewingPostId(null);
     }
     window.scrollTo(0, 0);
   };
@@ -107,16 +111,26 @@ export default function App() {
               <Feed 
                 onUserClick={(id) => handleNavigate('profile', id)} 
                 onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
+                onPostClick={(id) => handleNavigate('post', id)}
                 highlightPostId={highlightPostId}
               />
             )}
             {currentPage === 'reels' && <Reels onUserClick={(id) => handleNavigate('profile', id)} />}
+            {currentPage === 'post' && viewingPostId && (
+              <PostPage 
+                postId={viewingPostId} 
+                onBack={() => handleNavigate('feed')}
+                onUserClick={(id) => handleNavigate('profile', id)}
+                onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
+              />
+            )}
             {currentPage === 'hashtag' && activeHashtag && (
               <HashtagFeed 
                 hashtag={activeHashtag} 
                 onBack={() => handleNavigate('feed')}
                 onUserClick={(id) => handleNavigate('profile', id)}
                 onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
+                onPostClick={(id) => handleNavigate('post', id)}
               />
             )}
             {currentPage === 'profile' && (
@@ -137,6 +151,7 @@ export default function App() {
               <Explore 
                 onUserClick={(id) => handleNavigate('profile', id)} 
                 onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
+                onPostClick={(id) => handleNavigate('post', id)}
               />
             )}
             {currentPage === 'notifications' && (

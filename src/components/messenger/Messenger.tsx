@@ -49,6 +49,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
   const [deletingMessage, setDeletingMessage] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [activeMessageActions, setActiveMessageActions] = useState<string | null>(null);
+  const [lastMessages, setLastMessages] = useState<Record<string, Message>>({});
   const [editValue, setEditValue] = useState('');
   
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -270,7 +271,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     // Fetch unique contacts from messages
     const { data: recentMessages, error } = await supabase
       .from('messages')
-      .select('sender_id, receiver_id, created_at')
+      .select('*')
       .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
@@ -280,10 +281,17 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     }
 
     const contactIds = new Set<string>();
+    const lastMsgs: Record<string, Message> = {};
+    
     recentMessages?.forEach(msg => {
-      if (msg.sender_id !== user.id) contactIds.add(msg.sender_id);
-      if (msg.receiver_id !== user.id) contactIds.add(msg.receiver_id);
+      const otherId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
+      if (!contactIds.has(otherId)) {
+        contactIds.add(otherId);
+        lastMsgs[otherId] = msg;
+      }
     });
+
+    setLastMessages(lastMsgs);
 
     if (contactIds.size > 0) {
       const { data: profiles } = await supabase
@@ -591,16 +599,24 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
   const handleDeleteMessage = async () => {
     if (!deletingMessage) return;
 
-    const { error } = await supabase
-      .from('messages')
-      .delete()
-      .eq('id', deletingMessage.id);
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', deletingMessage.id);
 
-    if (error) {
-      toast.error('Failed to delete message');
-    } else {
-      setMessages(prev => prev.filter(m => m.id !== deletingMessage.id));
-      setDeletingMessage(null);
+      if (error) {
+        console.error('Delete error:', error);
+        toast.error('Failed to delete message');
+      } else {
+        setMessages(prev => prev.filter(m => m.id !== deletingMessage.id));
+        toast.success('Message deleted');
+        setDeletingMessage(null);
+        setActiveMessageActions(null);
+      }
+    } catch (err) {
+      console.error('Delete catch error:', err);
+      toast.error('An unexpected error occurred');
     }
   };
 
@@ -803,10 +819,19 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                         </div>
                       )}
                       <div className="relative group/msg">
-                        <div 
+                        <motion.div 
+                          drag="x"
+                          dragConstraints={{ left: 0, right: 100 }}
+                          dragElastic={0.2}
+                          onDragEnd={(_, info) => {
+                            if (info.offset.x > 50) {
+                              setReplyingTo(msg);
+                              messageInputRef.current?.focus();
+                            }
+                          }}
                           onClick={() => setActiveMessageActions(activeMessageActions === msg.id ? null : msg.id)}
                           className={cn(
-                            "px-5 py-3.5 rounded-[28px] text-sm relative group/msg shadow-sm transition-all duration-300 cursor-pointer",
+                            "px-5 py-3.5 rounded-[28px] text-sm relative group/msg shadow-sm transition-all duration-300 cursor-pointer touch-none",
                             msg.sender_id === user?.id 
                               ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-tr-none hover:shadow-emerald-500/20' 
                               : 'bg-white text-gray-800 rounded-tl-none border border-gray-100 hover:border-gray-200'
@@ -835,49 +860,44 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                               ))}
                             </div>
                           )}
-                        </div>
+                        </motion.div>
 
-                        {/* Message Actions */}
+                        {/* Message Actions (Desktop Hover) */}
                         <div className={cn(
-                          "absolute -top-12 flex items-center gap-1 transition-all z-20 bg-white/95 backdrop-blur-md p-1.5 rounded-full shadow-xl border border-gray-100",
-                          msg.sender_id === user?.id ? "right-0" : "left-0",
-                          activeMessageActions === msg.id ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:translate-y-0 group-hover/msg:pointer-events-auto"
+                          "hidden lg:flex absolute top-1/2 -translate-y-1/2 items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity z-10",
+                          msg.sender_id === user?.id ? "right-full mr-2" : "left-full ml-2"
                         )}>
                           <button 
-                            onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); setActiveMessageActions(null); }}
-                            className="p-2 hover:bg-emerald-50 text-gray-400 hover:text-emerald-500 rounded-full transition-all active:scale-90"
+                            onClick={() => setReplyingTo(msg)}
+                            className="p-2 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-emerald-500 shadow-sm transition-all active:scale-90"
                             title="Reply"
                           >
                             <MessageSquare className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={(e) => { e.stopPropagation(); setForwardingMessage(msg); setActiveMessageActions(null); }}
-                            className="p-2 hover:bg-blue-50 text-gray-400 hover:text-blue-500 rounded-full transition-all active:scale-90"
+                            onClick={() => setForwardingMessage(msg)}
+                            className="p-2 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-blue-500 shadow-sm transition-all active:scale-90"
                             title="Forward"
                           >
                             <Share2 className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
                               navigator.clipboard.writeText(msg.content);
                               toast.success('Copied to clipboard');
-                              setActiveMessageActions(null);
                             }}
-                            className="p-2 hover:bg-emerald-50 text-gray-400 hover:text-emerald-500 rounded-full transition-all active:scale-90"
+                            className="p-2 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-emerald-500 shadow-sm transition-all active:scale-90"
                             title="Copy"
                           >
                             <Copy className="w-4 h-4" />
                           </button>
                           {msg.sender_id === user?.id && (
                             <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
+                              onClick={() => {
                                 setEditingMessage(msg);
                                 setEditValue(msg.content);
-                                setActiveMessageActions(null);
                               }}
-                              className="p-2 hover:bg-emerald-50 text-gray-400 hover:text-emerald-500 rounded-full transition-all"
+                              className="p-2 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-emerald-500 shadow-sm"
                               title="Edit"
                             >
                               <Edit3 className="w-4 h-4" />
@@ -885,44 +905,40 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                           )}
                           {msg.sender_id === user?.id && (
                             <button 
-                              onClick={(e) => { e.stopPropagation(); setDeletingMessage(msg); setActiveMessageActions(null); }}
-                              className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 rounded-full transition-all"
+                              onClick={() => setDeletingMessage(msg)}
+                              className="p-2 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-rose-500 shadow-sm"
                               title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}
-                          <div className="w-px h-4 bg-gray-100 mx-1" />
-                          <div className="flex gap-0.5">
-                            {['❤️', '🔥', '😂'].map(emoji => (
-                              <button 
-                                key={emoji}
-                                onClick={(e) => { e.stopPropagation(); handleReact(msg.id, emoji); setActiveMessageActions(null); }}
-                                className="hover:scale-125 transition-transform p-1 text-base"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
                         </div>
                       </div>
                       <div className={cn(
-                        "flex items-center gap-1.5",
+                        "flex items-center gap-1.5 mt-1",
                         msg.sender_id === user?.id ? "justify-end" : "justify-start"
                       )}>
                         <span className="text-[9px] font-medium text-gray-400 flex items-center gap-1">
                           {formatDate(msg.created_at)}
-                          {msg.is_edited && <span className="italic opacity-70">(edited)</span>}
+                          {msg.is_edited && <span className="text-[8px] uppercase tracking-tighter opacity-70 font-bold">(Edited)</span>}
                         </span>
                         {msg.sender_id === user?.id && (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center">
                             {msg.is_read ? (
-                              <div className="flex items-center gap-1">
-                                <span className="text-[8px] font-bold text-emerald-500 uppercase">Seen</span>
-                                <CheckCheck className="w-3 h-3 text-emerald-500" />
+                              <div className="relative flex items-center">
+                                <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                                {activeChat?.avatar_url && (
+                                  <motion.img 
+                                    initial={{ scale: 0, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    src={activeChat.avatar_url} 
+                                    className="w-2.5 h-2.5 rounded-full border border-white absolute -right-1 -bottom-0.5 shadow-sm" 
+                                    alt=""
+                                  />
+                                )}
                               </div>
                             ) : (
-                              <Check className="w-3 h-3 text-gray-300" />
+                              <Check className="w-3.5 h-3.5 text-gray-300" />
                             )}
                           </div>
                         )}
@@ -930,17 +946,25 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                     </div>
                   </div>
                 ))}
-                {typingUsers.length > 0 && (
+                {typingUsers.length > 0 && activeChat && (
                   <div className="flex justify-start">
-                    <div className="bg-white border border-gray-100 p-3 rounded-2xl rounded-tl-none flex items-center gap-2 shadow-sm">
-                      <div className="flex gap-1">
-                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <div className="flex items-end gap-2">
+                      <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0 border border-gray-100">
+                        {activeChat.avatar_url ? (
+                          <img src={activeChat.avatar_url} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400">
+                            {activeChat.username[0].toUpperCase()}
+                          </div>
+                        )}
                       </div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                        {activeChat.full_name || activeChat.username} is typing...
-                      </span>
+                      <div className="bg-white border border-gray-100 px-4 py-2.5 rounded-2xl rounded-bl-none flex items-center gap-2 shadow-sm">
+                        <div className="flex gap-1">
+                          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1112,6 +1136,89 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
               </>
             )}
           </div>
+
+      {/* Mobile Action Sheet */}
+      <AnimatePresence>
+        {activeMessageActions && (
+          <div className="lg:hidden fixed inset-0 z-[90] flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={() => setActiveMessageActions(null)}>
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white w-full rounded-t-[32px] p-6 pb-12 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6" />
+              <div className="grid grid-cols-4 gap-4 mb-8">
+                <button 
+                  onClick={() => { 
+                    const msg = messages.find(m => m.id === activeMessageActions);
+                    if (msg) setReplyingTo(msg); 
+                    setActiveMessageActions(null); 
+                  }} 
+                  className="flex flex-col items-center gap-2"
+                >
+                  <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><MessageSquare className="w-6 h-6" /></div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Reply</span>
+                </button>
+                <button 
+                  onClick={() => { 
+                    const msg = messages.find(m => m.id === activeMessageActions);
+                    if (msg) setForwardingMessage(msg); 
+                    setActiveMessageActions(null); 
+                  }} 
+                  className="flex flex-col items-center gap-2"
+                >
+                  <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl"><Share2 className="w-6 h-6" /></div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Forward</span>
+                </button>
+                <button 
+                  onClick={() => { 
+                    const msg = messages.find(m => m.id === activeMessageActions);
+                    if (msg) {
+                      navigator.clipboard.writeText(msg.content); 
+                      toast.success('Copied'); 
+                    }
+                    setActiveMessageActions(null); 
+                  }} 
+                  className="flex flex-col items-center gap-2"
+                >
+                  <div className="p-4 bg-gray-50 text-gray-600 rounded-2xl"><Copy className="w-6 h-6" /></div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Copy</span>
+                </button>
+                {messages.find(m => m.id === activeMessageActions)?.sender_id === user?.id && (
+                  <button 
+                    onClick={() => { 
+                      const msg = messages.find(m => m.id === activeMessageActions);
+                      if (msg) setDeletingMessage(msg); 
+                      setActiveMessageActions(null); 
+                    }} 
+                    className="flex flex-col items-center gap-2"
+                  >
+                    <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl"><Trash2 className="w-6 h-6" /></div>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase">Delete</span>
+                  </button>
+                )}
+              </div>
+              <div className="flex justify-between items-center bg-gray-50 p-4 rounded-2xl">
+                {['❤️', '🔥', '😂', '😮', '😢', '👏'].map(emoji => (
+                  <button 
+                    key={emoji} 
+                    onClick={() => { 
+                      if (activeMessageActions) handleReact(activeMessageActions, emoji); 
+                      setActiveMessageActions(null); 
+                    }} 
+                    className="text-2xl hover:scale-125 transition-transform"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Forward Modal */}
       <AnimatePresence>
@@ -1359,10 +1466,25 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                       {contact.full_name || contact.username}
                       {contact.is_verified && <VerificationBadge size="sm" />}
                     </h4>
-                    <span className="text-[10px] font-medium text-gray-400">Just now</span>
+                    {lastMessages[contact.id] && (
+                      <span className="text-[10px] font-medium text-gray-400">
+                        {formatDate(lastMessages[contact.id].created_at)}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate font-medium">
-                    {isUserOnline(contact.id) ? 'Active now' : 'Tap to open chat'}
+                  <p className="text-xs text-gray-500 truncate font-medium flex items-center gap-1">
+                    {lastMessages[contact.id] ? (
+                      <>
+                        {lastMessages[contact.id].sender_id === user?.id && (
+                          <span className="text-emerald-500">You: </span>
+                        )}
+                        {lastMessages[contact.id].media_type === 'image' ? 'Sent an image' : 
+                         lastMessages[contact.id].media_type === 'audio' ? 'Sent a voice message' :
+                         lastMessages[contact.id].content}
+                      </>
+                    ) : (
+                      isUserOnline(contact.id) ? 'Active now' : 'Tap to open chat'
+                    )}
                   </p>
                 </div>
               </button>

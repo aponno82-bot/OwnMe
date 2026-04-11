@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck, Trash2, Shield, Ban, MessageSquare, Heart, Smile, VideoOff } from 'lucide-react';
+import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck, Trash2, Shield, Ban, MessageSquare, Heart, Smile, VideoOff, Share2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Message, Profile, Connection } from '../../types';
@@ -44,6 +44,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   const [isSearchingChat, setIsSearchingChat] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,6 +178,28 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
   const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  const handleForwardMessage = async (contactId: string) => {
+    if (!forwardingMessage || !user) return;
+
+    const messageObj = {
+      sender_id: user.id,
+      receiver_id: contactId,
+      content: forwardingMessage.content,
+      media_url: forwardingMessage.media_url,
+      media_type: forwardingMessage.media_type,
+      is_read: false,
+      is_delivered: false
+    };
+
+    const { error } = await supabase.from('messages').insert(messageObj);
+    if (error) {
+      toast.error('Failed to forward message');
+    } else {
+      toast.success('Message forwarded');
+      setForwardingMessage(null);
     }
   };
 
@@ -771,6 +794,13 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
                           </button>
+                          <button 
+                            onClick={() => setForwardingMessage(msg)}
+                            className="p-1.5 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-blue-500 shadow-sm"
+                            title="Forward"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
                           {msg.sender_id === user?.id && (
                             <button 
                               onClick={async () => {
@@ -950,21 +980,24 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                           }}
                           className="w-full pl-6 pr-12 py-3.5 bg-gray-50 border-none rounded-[24px] text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                         />
-                        <button 
-                          type="submit" 
-                          disabled={!newMessage.trim()} 
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all disabled:opacity-50 active:scale-90"
-                        >
-                          <Send className="w-5 h-5" />
-                        </button>
+                        {newMessage.trim() && (
+                          <button 
+                            type="submit" 
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all active:scale-90"
+                          >
+                            <Send className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
-                      <button 
-                        type="button" 
-                        onClick={startRecording}
-                        className="p-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
-                      >
-                        <Mic className="w-5 h-5" />
-                      </button>
+                      {!newMessage.trim() && (
+                        <button 
+                          type="button" 
+                          onClick={startRecording}
+                          className="p-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                        >
+                          <Mic className="w-5 h-5" />
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -990,6 +1023,59 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
             </div>
           )}
       </div>
+
+      {/* Forward Modal */}
+      <AnimatePresence>
+        {forwardingMessage && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 glass">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-gray-100"
+            >
+              <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900">Forward Message</h3>
+                <button onClick={() => setForwardingMessage(null)} className="p-2 hover:bg-gray-50 rounded-full text-gray-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 max-h-[400px] overflow-y-auto no-scrollbar">
+                <div className="space-y-2">
+                  {connections.map(conn => {
+                    const contact = conn.sender_id === user?.id ? conn.receiver : conn.sender;
+                    if (!contact) return null;
+                    return (
+                      <button
+                        key={contact.id}
+                        onClick={() => handleForwardMessage(contact.id)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-2xl transition-all group"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden border border-gray-100 group-hover:border-emerald-500 transition-all">
+                          {contact.avatar_url ? (
+                            <img src={contact.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
+                              {contact.username[0].toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 text-left">
+                          <h4 className="text-sm font-bold text-gray-900">{contact.full_name || contact.username}</h4>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wider">@{contact.username}</p>
+                        </div>
+                        <div className="p-2 bg-emerald-50 text-emerald-500 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Send className="w-4 h-4" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

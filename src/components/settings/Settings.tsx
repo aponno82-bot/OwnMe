@@ -109,7 +109,7 @@ export default function Settings() {
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bio</label>
               <textarea 
-                defaultValue={profile?.bio || ''}
+                value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={3}
                 className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"

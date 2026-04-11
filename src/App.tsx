@@ -43,41 +43,42 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel(`global-calls:${user.id}`)
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'messages',
-        filter: `receiver_id=eq.${user.id}`
-      }, async (payload) => {
-        const msg = payload.new;
-        if (msg.media_type === 'call') {
-          if (msg.content === 'START_CALL') {
-            const { data: caller } = await supabase.from('profiles').select('*').eq('id', msg.sender_id).single();
-            if (caller) {
-              setIncomingCall({ from: caller, type: msg.media_url as 'audio' | 'video' });
-              setActiveCallContact(caller);
-              setCallStatus('ringing');
-            }
-          } else if (msg.content === 'END_CALL') {
-            setCallStatus('ended');
-            clearInterval(callTimerRef.current);
-            setTimeout(() => {
-              setIncomingCall(null);
-              setIsCalling(null);
-              setCallStatus(null);
-              setActiveCallContact(null);
-              setCallDuration(0);
-            }, 2000);
-          } else if (msg.content === 'ACCEPT_CALL') {
-            setCallStatus('connected');
-            setCallDuration(0);
-            clearInterval(callTimerRef.current);
-            callTimerRef.current = setInterval(() => {
-              setCallDuration(prev => prev + 1);
-            }, 1000);
+    const channel = supabase.channel(`calls:${user.id}`, {
+      config: {
+        broadcast: { self: true }
+      }
+    });
+
+    channel
+      .on('broadcast', { event: 'signal' }, async ({ payload }) => {
+        const { type: signalType, from, to, callType } = payload;
+        
+        if (to !== user.id) return;
+
+        if (signalType === 'START_CALL') {
+          const { data: caller } = await supabase.from('profiles').select('*').eq('id', from).single();
+          if (caller) {
+            setIncomingCall({ from: caller, type: callType });
+            setActiveCallContact(caller);
+            setCallStatus('ringing');
           }
+        } else if (signalType === 'END_CALL') {
+          setCallStatus('ended');
+          clearInterval(callTimerRef.current);
+          setTimeout(() => {
+            setIncomingCall(null);
+            setIsCalling(null);
+            setCallStatus(null);
+            setActiveCallContact(null);
+            setCallDuration(0);
+          }, 2000);
+        } else if (signalType === 'ACCEPT_CALL') {
+          setCallStatus('connected');
+          setCallDuration(0);
+          clearInterval(callTimerRef.current);
+          callTimerRef.current = setInterval(() => {
+            setCallDuration(prev => prev + 1);
+          }, 1000);
         }
       })
       .subscribe();
@@ -89,10 +90,22 @@ export default function App() {
       setActiveCallContact(contact);
       setCallStatus('ringing');
       
+      channel.send({
+        type: 'broadcast',
+        event: 'signal',
+        payload: {
+          type: 'START_CALL',
+          from: user.id,
+          to: contact.id,
+          callType: type
+        }
+      });
+
+      // Also insert a message for history
       supabase.from('messages').insert({
         sender_id: user.id,
         receiver_id: contact.id,
-        content: 'START_CALL',
+        content: `Started ${type} call`,
         media_type: 'call',
         media_url: type,
         is_read: false
@@ -111,12 +124,19 @@ export default function App() {
   const handleAcceptCall = async () => {
     if (!incomingCall || !user) return;
     
-    await supabase.from('messages').insert({
-      sender_id: user.id,
-      receiver_id: incomingCall.from.id,
-      content: 'ACCEPT_CALL',
-      media_type: 'call',
-      is_read: false
+    const channel = supabase.channel(`calls:${incomingCall.from.id}`);
+    await channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: 'signal',
+          payload: {
+            type: 'ACCEPT_CALL',
+            from: user.id,
+            to: incomingCall.from.id
+          }
+        });
+      }
     });
 
     setCallStatus('connected');
@@ -131,12 +151,19 @@ export default function App() {
   const handleEndCall = async () => {
     if (!user || !activeCallContact) return;
     
-    await supabase.from('messages').insert({
-      sender_id: user.id,
-      receiver_id: activeCallContact.id,
-      content: 'END_CALL',
-      media_type: 'call',
-      is_read: false
+    const channel = supabase.channel(`calls:${activeCallContact.id}`);
+    await channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        channel.send({
+          type: 'broadcast',
+          event: 'signal',
+          payload: {
+            type: 'END_CALL',
+            from: user.id,
+            to: activeCallContact.id
+          }
+        });
+      }
     });
 
     setCallStatus('ended');

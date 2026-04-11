@@ -489,7 +489,7 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
       sender_id: user.id,
       receiver_id: activeChat.id,
       content: newMessage.trim(),
-      reply_to_id: replyingTo?.id || null
+      // reply_to_id: replyingTo?.id || null // Removed due to missing column in schema
     };
 
     const { data, error } = await supabase.from('messages').insert(messageObj).select().single();

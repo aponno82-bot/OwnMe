@@ -21,6 +21,7 @@ import AdminPanel from './components/admin/AdminPanel';
 import TrendingHashtags from './components/explore/TrendingHashtags';
 import HashtagFeed from './components/explore/HashtagFeed';
 import CallModal from './components/messenger/CallModal';
+import MobileSidebar from './components/layout/MobileSidebar';
 import { Users, Calendar } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { Profile } from './types';
@@ -31,6 +32,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Global Call State
   const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
@@ -266,7 +268,7 @@ export default function App() {
       
       <main className={cn(
         "flex-1 container mx-auto px-4 py-6 lg:py-8 lg:mb-0",
-        !isMessengerPage ? "mt-[72px] mb-[80px]" : "mt-0 mb-0 lg:mt-[72px]"
+        !isMessengerPage ? "mt-[72px] mb-20" : "mt-0 mb-0 lg:mt-[72px]"
       )}>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Sidebar - Navigation */}
@@ -328,7 +330,20 @@ export default function App() {
       </main>
 
       {/* Mobile Bottom Nav */}
-      {!isMessengerPage && <BottomNav onNavigate={handleNavigate} currentPage={currentPage} />}
+      {!isMessengerPage && (
+        <BottomNav 
+          onNavigate={handleNavigate} 
+          currentPage={currentPage} 
+          onOpenMenu={() => setIsMobileMenuOpen(true)}
+        />
+      )}
+
+      <MobileSidebar 
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        onNavigate={handleNavigate}
+        currentPage={currentPage}
+      />
       
       <AnimatePresence>
         {(isCalling || incomingCall) && activeCallContact && (

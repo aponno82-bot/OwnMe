@@ -128,6 +128,9 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
       checkIfSaved();
     }
 
+    fetchLikesCount();
+    fetchCommentsCount();
+
     const channel = supabase
       .channel(`post-stats-${post.id}-${instanceId}`)
       .on('postgres_changes', { 

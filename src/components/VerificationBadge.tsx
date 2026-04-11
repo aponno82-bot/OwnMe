@@ -15,13 +15,15 @@ export default function VerificationBadge({ className, size = 'md' }: Verificati
   };
 
   return (
-    <div className={cn("inline-flex items-center justify-center", className)}>
+    <div className={cn("inline-flex items-center justify-center relative group", className)}>
       <CheckCircle 
         className={cn(
           sizeClasses[size], 
-          "text-blue-500 fill-current drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+          "text-emerald-500 fill-emerald-500/10 transition-all duration-300 group-hover:scale-110",
+          "drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]"
         )} 
       />
+      <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-sm opacity-0 group-hover:opacity-100 transition-opacity" />
     </div>
   );
 }

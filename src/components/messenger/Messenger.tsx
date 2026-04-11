@@ -139,20 +139,20 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
 
     const channel = supabase.channel(`typing:${activeChat.id}`);
     
-    const trackTyping = async () => {
-      await channel.track({
-        userId: user.id,
-        isTyping: isTyping,
-        typingTo: activeChat.id
-      });
-    };
-
-    trackTyping();
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({
+          userId: user.id,
+          isTyping: isTyping,
+          typingTo: activeChat.id
+        });
+      }
+    });
 
     return () => {
       channel.unsubscribe();
     };
-  }, [isTyping, activeChat, user]);
+  }, [isTyping, activeChat?.id, user?.id]);
 
   const handleTyping = () => {
     if (!isTyping) setIsTyping(true);
@@ -844,8 +844,8 @@ export default function Messenger({ initialContactId, onUserClick }: MessengerPr
                           <div className="flex items-center gap-1">
                             {msg.is_read ? (
                               <>
-                                <span className="text-[8px] font-bold text-blue-400 uppercase">Seen</span>
-                                <CheckCheck className="w-3 h-3 text-blue-400" />
+                                <span className="text-[8px] font-bold text-emerald-500 uppercase">Seen</span>
+                                <CheckCheck className="w-3 h-3 text-emerald-500" />
                               </>
                             ) : msg.is_delivered ? (
                               <CheckCheck className="w-3 h-3 text-gray-300" />

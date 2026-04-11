@@ -57,6 +57,8 @@ export interface Connection {
   receiver_id: string;
   status: 'pending' | 'accepted';
   created_at: string;
+  sender?: Profile;
+  receiver?: Profile;
 }
 
 export interface Story {
@@ -95,6 +97,7 @@ export interface Message {
   reply_to_id?: string | null;
   reply_to_message?: Message | null;
   reactions?: { [emoji: string]: string[] }; // emoji -> list of user_ids
+  is_edited?: boolean;
 }
 
 export interface Group {

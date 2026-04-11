@@ -11,14 +11,24 @@ interface CallModalProps {
   onEnd: () => void;
   onAccept?: () => void;
   isIncoming?: boolean;
+  onMinimize?: () => void;
 }
 
-export default function CallModal({ type, status, contact, onEnd, onAccept, isIncoming }: CallModalProps) {
+export default function CallModal({ type, status, contact, onEnd, onAccept, isIncoming, onMinimize }: CallModalProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(type === 'audio');
   const [duration, setDuration] = useState(0);
+  const [isMinimized, setIsMinimized] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const ringingAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (status === 'ringing') {
+      // Simulate ringing sound (using a public URL or just UI feedback)
+      // For now, we'll just use UI feedback as we don't have a reliable audio asset
+    }
+  }, [status]);
 
   useEffect(() => {
     let interval: any;
@@ -48,14 +58,54 @@ export default function CallModal({ type, status, contact, onEnd, onAccept, isIn
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  if (isMinimized) {
+    return (
+      <motion.div 
+        layoutId="call-modal"
+        onClick={() => setIsMinimized(false)}
+        className="fixed bottom-24 right-4 z-[200] w-48 bg-gray-900 rounded-3xl shadow-2xl border border-white/10 overflow-hidden cursor-pointer group"
+      >
+        <div className="p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full overflow-hidden border border-white/20">
+            {contact.avatar_url ? (
+              <img src={contact.avatar_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gray-800 flex items-center justify-center text-gray-500">
+                <User className="w-6 h-6" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black text-white truncate uppercase tracking-wider">{contact.username}</p>
+            <p className="text-[9px] text-emerald-500 font-bold">
+              {status === 'ringing' ? 'Ringing...' : formatDuration(duration)}
+            </p>
+          </div>
+        </div>
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <Maximize2 className="w-5 h-5 text-white" />
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div 
+      layoutId="call-modal"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 sm:p-8"
     >
       <div className="relative w-full max-w-4xl aspect-video bg-gray-900 rounded-[48px] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col group">
+        
+        {/* Minimize Button */}
+        <button 
+          onClick={() => setIsMinimized(true)}
+          className="absolute top-8 left-8 p-3 bg-white/5 hover:bg-white/10 text-white rounded-2xl transition-all z-40 active:scale-90"
+        >
+          <Minimize2 className="w-5 h-5" />
+        </button>
         {/* Video Streams */}
         {type === 'video' && (
           <div className="absolute inset-0">

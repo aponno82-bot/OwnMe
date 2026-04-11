@@ -242,6 +242,8 @@ export default function App() {
   };
 
   const currentPage = getCurrentPage();
+  const isMessengerPage = currentPage === 'messages';
+  const isInboxPage = isMessengerPage && location.pathname.split('/').filter(Boolean).length > 1;
 
   if (loading) {
     return (
@@ -259,8 +261,6 @@ export default function App() {
       </>
     );
   }
-
-  const isMessengerPage = currentPage === 'messages';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -292,8 +292,8 @@ export default function App() {
               <Route path="/hashtag/:hashtag" element={<HashtagFeedWrapper onNavigate={handleNavigate} />} />
               <Route path="/profile/:userId" element={<ProfilePageWrapper onNavigate={handleNavigate} />} />
               <Route path="/profile" element={<ProfilePageWrapper onNavigate={handleNavigate} />} />
-              <Route path="/messages/:contactId" element={<MessengerWrapper onUserClick={(id) => handleNavigate('profile', id)} />} />
-              <Route path="/messages" element={<MessengerWrapper onUserClick={(id) => handleNavigate('profile', id)} />} />
+              <Route path="/messages/:contactId" element={<MessengerWrapper onUserClick={(id) => handleNavigate('profile', id)} onNavigate={handleNavigate} />} />
+              <Route path="/messages" element={<MessengerWrapper onUserClick={(id) => handleNavigate('profile', id)} onNavigate={handleNavigate} />} />
               <Route path="/explore" element={
                 <Explore 
                   onUserClick={(id) => handleNavigate('profile', id)} 
@@ -324,7 +324,7 @@ export default function App() {
           {/* Right Sidebar - Messenger/Activity */}
           <aside className="hidden lg:block lg:col-span-3 sticky top-24 h-[calc(100vh-120px)] overflow-y-auto no-scrollbar">
             <TrendingHashtags onHashtagClick={(tag) => handleNavigate('hashtag', tag)} />
-            <Messenger />
+            <Messenger onNavigate={handleNavigate} />
           </aside>
         </div>
       </main>
@@ -390,13 +390,14 @@ function ProfilePageWrapper({ onNavigate }: { onNavigate: (page: string, id?: st
   );
 }
 
-function MessengerWrapper({ onUserClick }: { onUserClick: (userId: string) => void }) {
+function MessengerWrapper({ onUserClick, onNavigate }: { onUserClick: (userId: string) => void, onNavigate: (page: string, params?: any) => void }) {
   const { contactId } = useParams();
   return (
     <div className="fixed inset-0 lg:static lg:h-[calc(100vh-120px)] z-40 bg-white">
       <Messenger 
         initialContactId={contactId} 
         onUserClick={onUserClick}
+        onNavigate={onNavigate}
       />
     </div>
   );

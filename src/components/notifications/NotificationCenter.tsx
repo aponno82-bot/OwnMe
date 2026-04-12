@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Notification } from '../../types';
 import { formatDate, cn } from '../../lib/utils';
-import { Bell, Heart, MessageCircle, UserPlus, MessageSquare } from 'lucide-react';
+import { Bell, Heart, MessageCircle, UserPlus, MessageSquare, UserCheck, Check, X as XIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendBrowserNotification } from '../../lib/notifications';
 
@@ -76,6 +77,7 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
       case 'comment': return <MessageCircle className="w-4 h-4 text-emerald-500" />;
       case 'follow': return <UserPlus className="w-4 h-4 text-blue-500" />;
       case 'message': return <MessageSquare className="w-4 h-4 text-amber-500" />;
+      case 'tag_request': return <UserCheck className="w-4 h-4 text-indigo-500" />;
       default: return <Bell className="w-4 h-4 text-gray-400" />;
     }
   };
@@ -87,7 +89,81 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
       case 'comment': return `${name} commented on your post`;
       case 'follow': return `${name} started following you`;
       case 'message': return `${name} sent you a message`;
+      case 'tag_request': return `${name} tagged you in a post`;
       default: return 'New notification';
+    }
+  };
+
+  const handleApproveTag = async (notification: Notification) => {
+    if (!notification.post_id || !user) return;
+
+    try {
+      // 1. Get the post
+      const { data: post } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('id', notification.post_id)
+        .single();
+
+      if (post) {
+        const pendingTags = post.pending_tags || [];
+        const taggedUsers = post.tagged_users || [];
+
+        // 2. Move user from pending to tagged
+        const newPending = pendingTags.filter((id: string) => id !== user.id);
+        const newTagged = [...taggedUsers, user.id];
+
+        await supabase
+          .from('posts')
+          .update({
+            pending_tags: newPending,
+            tagged_users: newTagged
+          })
+          .eq('id', post.id);
+
+        // 3. Mark notification as read
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', notification.id);
+
+        toast.success('Tag approved!');
+        fetchNotifications();
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleDeclineTag = async (notification: Notification) => {
+    if (!notification.post_id || !user) return;
+
+    try {
+      const { data: post } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('id', notification.post_id)
+        .single();
+
+      if (post) {
+        const pendingTags = post.pending_tags || [];
+        const newPending = pendingTags.filter((id: string) => id !== user.id);
+
+        await supabase
+          .from('posts')
+          .update({ pending_tags: newPending })
+          .eq('id', post.id);
+
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', notification.id);
+
+        toast.success('Tag declined');
+        fetchNotifications();
+      }
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -152,6 +228,25 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
                   {' '}{getMessage(notification).replace(notification.profiles?.full_name || notification.profiles?.username || '', '').trim()}
                 </p>
                 <span className="text-[10px] text-gray-400 font-medium">{formatDate(notification.created_at)}</span>
+                
+                {notification.type === 'tag_request' && !notification.is_read && (
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleApproveTag(notification); }}
+                      className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all"
+                    >
+                      <Check className="w-3 h-3" />
+                      Approve
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDeclineTag(notification); }}
+                      className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold hover:bg-gray-200 transition-all"
+                    >
+                      <XIcon className="w-3 h-3" />
+                      Decline
+                    </button>
+                  </div>
+                )}
               </div>
 
               {!notification.is_read && (

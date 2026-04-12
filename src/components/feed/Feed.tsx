@@ -16,10 +16,11 @@ interface FeedProps {
   onUserClick: (userId: string) => void;
   onHashtagClick: (hashtag: string) => void;
   onPostClick: (postId: string) => void;
+  onSeeAllSuggestions?: () => void;
   highlightPostId?: string | null;
 }
 
-export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlightPostId }: FeedProps) {
+export default function Feed({ onUserClick, onHashtagClick, onPostClick, onSeeAllSuggestions, highlightPostId }: FeedProps) {
   const { profile, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [forYouPosts, setForYouPosts] = useState<Post[]>([]);
@@ -144,8 +145,8 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
 
   return (
     <div className="space-y-6">
-      <Announcements />
       <StoryBar />
+      <Announcements />
       <CreatePost />
 
       <div className="flex flex-wrap gap-2 p-1.5 bg-gray-100/50 backdrop-blur-sm rounded-[24px] w-full sm:w-fit border border-gray-100">
@@ -199,7 +200,7 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, highlig
       <div className="space-y-6">
         {/* Mobile Suggested Users */}
         <div className="lg:hidden">
-          <SuggestedUsers onUserClick={onUserClick} />
+          <SuggestedUsers onUserClick={onUserClick} onSeeAll={onSeeAllSuggestions} />
         </div>
 
         {loading || (feedType === 'forYou' && forYouLoading) ? (

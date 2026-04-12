@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Post, Profile } from '../../types';
 import PostCard from '../feed/PostCard';
-import { Edit3, MapPin, Link as LinkIcon, Calendar, Grid, List, Heart, X, Camera, MessageCircle, MoreHorizontal, ShieldAlert, Flag, Copy, Loader2, Shield } from 'lucide-react';
+import { Edit3, MapPin, Link as LinkIcon, Calendar, Grid, List, Heart, X, Camera, MessageCircle, MoreHorizontal, ShieldAlert, Flag, Copy, Loader2, Shield, Bookmark } from 'lucide-react';
 import VerificationBadge from '../VerificationBadge';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,7 +23,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [likedPosts, setLikedPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'media'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'media' | 'saved'>('posts');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -35,6 +35,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [connectionsList, setConnectionsList] = useState<Profile[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const instanceId = useState(() => Math.random().toString(36).substring(7))[0];
   
   const isOwnProfile = user?.id === userId;
@@ -61,6 +62,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
       fetchUserPosts();
       fetchCounts();
       fetchLikedPosts();
+      fetchSavedPosts();
       checkBlockStatus();
 
       const profileChannel = supabase
@@ -272,6 +274,31 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
       }
     } catch (error) {
       console.error('Error fetching liked posts:', error);
+    }
+  }
+
+  async function fetchSavedPosts() {
+    if (!userId || !isOwnProfile) return;
+    try {
+      const { data: bookmarks } = await supabase
+        .from('bookmarks')
+        .select('post_id')
+        .eq('user_id', userId);
+      
+      if (bookmarks && bookmarks.length > 0) {
+        const postIds = bookmarks.map(b => b.post_id);
+        const { data: postsData } = await supabase
+          .from('posts')
+          .select('*, profiles (*)')
+          .in('id', postIds)
+          .order('created_at', { ascending: false });
+        
+        if (postsData) setSavedPosts(postsData);
+      } else {
+        setSavedPosts([]);
+      }
+    } catch (error) {
+      console.error('Error fetching saved posts:', error);
     }
   }
 
@@ -586,6 +613,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
               { id: 'posts', label: 'Posts', icon: Grid },
               { id: 'media', label: 'Media', icon: List },
               { id: 'likes', label: 'Likes', icon: Heart },
+              ...(isOwnProfile ? [{ id: 'saved', label: 'Saved', icon: Bookmark }] : []),
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -611,11 +639,12 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
           {loading ? (
             <div className="card-premium h-64 animate-pulse bg-gray-50" />
           ) : (
-            (activeTab === 'likes' ? likedPosts : posts)
+            (activeTab === 'likes' ? likedPosts : activeTab === 'saved' ? savedPosts : posts)
               .filter(post => {
                 if (activeTab === 'posts') return true;
                 if (activeTab === 'media') return !!post.media_url;
                 if (activeTab === 'likes') return true;
+                if (activeTab === 'saved') return true;
                 return true;
               })
               .map((post: Post) => (

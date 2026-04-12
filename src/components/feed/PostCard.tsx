@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2, Mic } from 'lucide-react';
 import VerificationBadge from '../VerificationBadge';
 import { Post, Comment } from '../../types';
 import { formatDate, cn, formatRelativeTime } from '../../lib/utils';
@@ -15,9 +15,10 @@ interface PostCardProps {
   onUserClick?: (userId: string) => void;
   onHashtagClick?: (hashtag: string) => void;
   onPostClick?: (postId: string) => void;
+  autoShowComments?: boolean;
 }
 
-export default function PostCard({ post, onUserClick, onHashtagClick, onPostClick }: PostCardProps) {
+export default function PostCard({ post, onUserClick, onHashtagClick, onPostClick, autoShowComments = false }: PostCardProps) {
   const { user, profile } = useAuth();
   const [likesCount, setLikesCount] = useState(post.reactions_count || 0);
   const [commentsCount, setCommentsCount] = useState(post.comments_count || 0);
@@ -26,7 +27,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(autoShowComments);
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -34,6 +35,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
   const [editPrivacy, setEditPrivacy] = useState(post.privacy || 'public');
   const [isUpdating, setIsUpdating] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [taggedProfiles, setTaggedProfiles] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -130,6 +132,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
 
     fetchLikesCount();
     fetchCommentsCount();
+    fetchTaggedProfiles();
 
     const channel = supabase
       .channel(`post-stats-${post.id}-${instanceId}`)
@@ -195,11 +198,22 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
   async function fetchComments() {
     const { data } = await supabase
       .from('comments')
-      .select('*, profiles (*)')
+      .select('*, profiles (*), comment_reactions (*)')
       .eq('post_id', post.id)
       .order('created_at', { ascending: true });
     
     if (data) setComments(data);
+  }
+
+  async function fetchTaggedProfiles() {
+    if (!post.tagged_users || post.tagged_users.length === 0) return;
+    
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('id', post.tagged_users);
+    
+    if (data) setTaggedProfiles(data);
   }
 
   function subscribeToComments() {
@@ -221,7 +235,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
   async function fetchNewCommentWithProfile(commentId: string) {
     const { data } = await supabase
       .from('comments')
-      .select('*, profiles (*)')
+      .select('*, profiles (*), comment_reactions (*)')
       .eq('id', commentId)
       .single();
     
@@ -285,17 +299,51 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
     }
   };
 
-  const handleShare = async () => {
+  const handleShareToTimeline = async () => {
+    if (!user) {
+      toast.error('Please sign in to share posts');
+      return;
+    }
+
     try {
-      await navigator.share({
-        title: 'OwnMe Post',
-        text: post.content,
-        url: window.location.href
+      const { error } = await supabase.from('posts').insert({
+        user_id: user.id,
+        content: `Shared a post from ${post.profiles?.full_name || post.profiles?.username}`,
+        shared_post_id: post.id,
+        privacy: 'public'
       });
+
+      if (error) throw error;
+      
+      // Increment share count on original post
+      await supabase
+        .from('posts')
+        .update({ shares_count: (sharesCount || 0) + 1 })
+        .eq('id', post.id);
+
       setSharesCount(prev => prev + 1);
-      // In a real app, we'd update this in the DB too
-    } catch (error) {
-      console.log('Share failed', error);
+      toast.success('Post shared to your timeline!');
+      setShowMenu(false);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'OwnMe Post',
+          text: post.content,
+          url: `${window.location.origin}/post/${post.id}`
+        });
+        setSharesCount(prev => prev + 1);
+      } catch (error) {
+        console.log('Share failed', error);
+      }
+    } else {
+      navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
+      toast.success('Post link copied!');
     }
   };
   const toggleLike = async () => {
@@ -342,10 +390,18 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
 
     setIsSubmittingComment(true);
     try {
+      let commentText = newComment.trim();
+      if (replyingTo) {
+        const mention = `@${replyingTo.profiles?.username} `;
+        if (!commentText.startsWith(mention)) {
+          commentText = mention + commentText;
+        }
+      }
+
       const { error } = await supabase.from('comments').insert({
         post_id: post.id,
         user_id: user.id,
-        text: newComment.trim(),
+        text: commentText,
         parent_id: replyingTo?.id || null
       });
 
@@ -356,6 +412,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
       
       setNewComment('');
       setReplyingTo(null);
+      fetchComments(); // Refresh comments
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -488,10 +545,15 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                 <div className="flex items-center gap-4 mt-1 ml-2">
                   <button 
                     onClick={() => handleLikeComment(comment.id)}
-                    className="text-[10px] font-bold text-gray-400 hover:text-rose-500 transition-colors flex items-center gap-1"
+                    className={cn(
+                      "text-[10px] font-bold transition-colors flex items-center gap-1",
+                      comment.comment_reactions?.some((r: any) => r.user_id === user?.id) 
+                        ? "text-rose-500" 
+                        : "text-gray-400 hover:text-rose-500"
+                    )}
                   >
-                    <Heart className="w-3 h-3" />
-                    Like
+                    <Heart className={cn("w-3 h-3", comment.comment_reactions?.some((r: any) => r.user_id === user?.id) && "fill-current")} />
+                    {comment.comment_reactions?.length || 0} Like
                   </button>
                   <button 
                     onClick={() => setReplyingTo(comment)}
@@ -594,9 +656,14 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                   is feeling <span className="font-bold text-gray-700">{post.feeling}</span>
                 </span>
               )}
-              {post.tagged_users && post.tagged_users.length > 0 && (
+              {taggedProfiles.length > 0 && (
                 <span className="text-xs text-gray-500">
-                  with <span className="font-bold text-gray-700">{post.tagged_users.length} others</span>
+                  with <span className="font-bold text-gray-700">
+                    {taggedProfiles.length === 1 
+                      ? taggedProfiles[0].full_name || taggedProfiles[0].username
+                      : `${taggedProfiles[0].full_name || taggedProfiles[0].username} and ${taggedProfiles.length - 1} others`
+                    }
+                  </span>
                 </span>
               )}
             </div>
@@ -604,7 +671,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
               <p className="text-[10px] text-gray-400 font-medium">{formatRelativeTime(post.created_at)}</p>
               <span className="text-gray-300">•</span>
               {post.privacy === 'public' && <Globe className="w-3 h-3 text-gray-400" />}
-              {post.privacy === 'friends' && <Users className="w-3 h-3 text-gray-400" />}
+              {post.privacy === 'followers' && <Users className="w-3 h-3 text-gray-400" />}
               {post.privacy === 'private' && <Lock className="w-3 h-3 text-gray-400" />}
               {!post.privacy && <Globe className="w-3 h-3 text-gray-400" />}
             </div>
@@ -636,6 +703,13 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                 >
                   <Bookmark className={cn("w-4 h-4", isSaved && "fill-current text-emerald-500")} />
                   {isSaved ? 'Saved' : 'Save Post'}
+                </button>
+                <button 
+                  onClick={handleShareToTimeline}
+                  className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Share to Timeline
                 </button>
                 <button 
                   onClick={() => {
@@ -724,7 +798,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                   <div className="flex gap-2">
                     {[
                       { id: 'public', label: 'Public', icon: Globe },
-                      { id: 'friends', label: 'Friends', icon: Users },
+                      { id: 'followers', label: 'Followers', icon: Users },
                       { id: 'private', label: 'Only Me', icon: Lock },
                     ].map((opt) => (
                       <button
@@ -794,6 +868,16 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                 controls 
                 className="w-full h-auto max-h-[600px] object-cover"
               />
+            ) : post.media_type === 'audio' ? (
+              <div className="w-full p-6 bg-emerald-50 rounded-2xl flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white">
+                  <Mic className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-emerald-900">Voice Note</p>
+                  <audio src={post.media_url} controls className="w-full mt-2 h-8" />
+                </div>
+              </div>
             ) : (
               <img 
                 src={post.media_url} 
@@ -802,6 +886,17 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                 referrerPolicy="no-referrer"
               />
             )}
+          </div>
+        )}
+
+        {post.shared_post && (
+          <div className="mt-4 p-4 rounded-2xl border border-gray-100 bg-gray-50/50">
+            <PostCard 
+              post={post.shared_post} 
+              onUserClick={onUserClick}
+              onHashtagClick={onHashtagClick}
+              onPostClick={onPostClick}
+            />
           </div>
         )}
       </div>

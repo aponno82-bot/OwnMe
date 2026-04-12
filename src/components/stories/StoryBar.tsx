@@ -261,8 +261,13 @@ export default function StoryBar() {
   };
 
   return (
-    <div className="relative">
-      <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between px-2">
+        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Stories</h3>
+      </div>
+      
+      <div className="relative card-premium p-4">
+        <div className="flex gap-4 overflow-x-auto pb-1 no-scrollbar">
         {/* Create Story */}
         <div 
           onClick={() => fileInputRef.current?.click()}
@@ -479,6 +484,7 @@ export default function StoryBar() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
     </div>
   );
 }

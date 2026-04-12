@@ -4,8 +4,9 @@ import { useAuth } from '../../lib/useAuth';
 import { toast } from 'sonner';
 import { Image as ImageIcon, Video, Smile, Send, X, Camera, Loader2, Users, Globe, Lock, Shield, Search, Mic } from 'lucide-react';
 import { Profile } from '../../types';
-import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../../lib/utils';
+import { AnimatePresence, motion } from 'motion/react';
+import { createNotification } from '../../services/notificationService';
 
 export default function CreatePost() {
   const { user, profile } = useAuth();
@@ -210,6 +211,13 @@ export default function CreatePost() {
 
       if (postError) throw postError;
 
+      // Send tag requests
+      if (taggedUsers.length > 0 && postData) {
+        for (const taggedUser of taggedUsers) {
+          await createNotification(taggedUser.id, user.id, 'tag_request', postData.id);
+        }
+      }
+
       // Save hashtags
       if (cleanHashtags.length > 0 && postData) {
         for (const tagName of cleanHashtags) {
@@ -266,7 +274,7 @@ export default function CreatePost() {
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-full text-[10px] font-bold text-gray-500 transition-all active:scale-95"
               >
                 {privacy === 'public' && <Globe className="w-3 h-3" />}
-                {privacy === 'friends' && <Users className="w-3 h-3" />}
+                {privacy === 'followers' && <Users className="w-3 h-3" />}
                 {privacy === 'private' && <Lock className="w-3 h-3" />}
                 <span className="capitalize">{privacy}</span>
               </button>
@@ -283,7 +291,7 @@ export default function CreatePost() {
                     >
                       {[
                         { id: 'public', label: 'Public', icon: Globe },
-                        { id: 'friends', label: 'Friends', icon: Users },
+                        { id: 'followers', label: 'Followers', icon: Users },
                         { id: 'private', label: 'Only Me', icon: Lock },
                       ].map((opt) => (
                         <button
@@ -426,7 +434,7 @@ export default function CreatePost() {
                 className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <ImageIcon className="w-5 h-5" />
-                <span className="text-xs font-bold">Photo</span>
+                <span className="text-xs font-bold hidden sm:inline">Photo</span>
               </button>
               <button 
                 type="button"
@@ -438,7 +446,7 @@ export default function CreatePost() {
                 className="p-2 hover:bg-blue-50 text-blue-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Video className="w-5 h-5" />
-                <span className="text-xs font-bold">Video</span>
+                <span className="text-xs font-bold hidden sm:inline">Video</span>
               </button>
               <button 
                 type="button" 
@@ -446,7 +454,7 @@ export default function CreatePost() {
                 className="p-2 hover:bg-amber-50 text-amber-600 rounded-xl transition-colors flex items-center gap-2"
               >
                 <Smile className="w-5 h-5" />
-                <span className="text-xs font-bold">Feeling</span>
+                <span className="text-xs font-bold hidden sm:inline">Feeling</span>
               </button>
               <button 
                 type="button" 
@@ -454,7 +462,7 @@ export default function CreatePost() {
                 className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors flex items-center gap-2"
               >
                 <Users className="w-5 h-5" />
-                <span className="text-xs font-bold">Tag</span>
+                <span className="text-xs font-bold hidden sm:inline">Tag</span>
               </button>
               <button 
                 type="button" 
@@ -465,7 +473,7 @@ export default function CreatePost() {
                 )}
               >
                 <Mic className="w-5 h-5" />
-                <span className="text-xs font-bold">{isRecording ? 'Stop' : 'Voice'}</span>
+                <span className="text-xs font-bold hidden sm:inline">{isRecording ? 'Stop' : 'Voice'}</span>
               </button>
             </div>
 

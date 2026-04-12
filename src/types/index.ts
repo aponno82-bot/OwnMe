@@ -21,11 +21,13 @@ export interface Post {
   user_id: string;
   content: string;
   media_url: string | null;
-  media_type?: 'image' | 'video' | null;
+  media_type?: 'image' | 'video' | 'audio' | null;
   post_type?: 'post' | 'reel';
-  privacy?: 'public' | 'friends' | 'private';
+  privacy?: 'public' | 'followers' | 'private';
   feeling?: string | null;
   tagged_users?: string[];
+  shared_post_id?: string | null;
+  shared_post?: Post;
   created_at: string;
   profiles?: Profile;
   reactions_count?: number;
@@ -123,7 +125,7 @@ export interface Notification {
   id: string;
   user_id: string;
   actor_id: string;
-  type: 'like' | 'comment' | 'follow' | 'message' | 'announcement';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'announcement' | 'tag_request';
   post_id?: string;
   is_read: boolean;
   created_at: string;

@@ -79,6 +79,7 @@ export default function PostPage() {
         onUserClick={(userId) => navigate(`/profile/${userId}`)}
         onHashtagClick={(tag) => navigate(`/hashtag/${tag}`)}
         onPostClick={() => {}} // Already on post page
+        autoShowComments={true}
       />
     </motion.div>
   );

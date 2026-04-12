@@ -10,6 +10,7 @@ import VerificationBadge from '../VerificationBadge';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendBrowserNotification } from '../../lib/notifications';
 import { createNotification } from '../../services/notificationService';
+import VoiceRecorder from './VoiceRecorder';
 import VoicePlayer from './VoicePlayer';
 import VideoPlayer from './VideoPlayer';
 
@@ -390,7 +391,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
             (c.sender_id === p.id && c.receiver_id === user.id)
           );
           
-          const lastMsg = lastMessages[p.id];
+          const lastMsg = lastMsgs[p.id];
           const iSentLast = lastMsg?.sender_id === user.id;
 
           if (activeTab === 'archived') return isArchived;
@@ -467,43 +468,10 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const file = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
-        await uploadVoiceMessage(file);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingDuration(0);
-      timerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
-    } catch (error) {
-      toast.error('Microphone access denied');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      clearInterval(timerRef.current);
-    }
+  const handleVoiceRecordingComplete = async (blob: Blob) => {
+    const file = new File([blob], 'voice_message.webm', { type: 'audio/webm' });
+    await uploadVoiceMessage(file);
+    setIsRecording(false);
   };
 
   const uploadVoiceMessage = async (file: File) => {
@@ -1179,29 +1147,10 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                 <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white/95 backdrop-blur-xl border-t border-gray-100/50 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
                   <div className="flex items-center gap-2 sm:gap-3 max-w-4xl mx-auto">
                     {isRecording ? (
-                      <div className="flex-1 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 bg-rose-50 rounded-2xl">
-                        <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
-                        <span className="text-xs sm:text-sm font-bold text-rose-600 flex-1 truncate">Recording... {formatDuration(recordingDuration)}</span>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setIsRecording(false);
-                            clearInterval(timerRef.current);
-                            mediaRecorderRef.current?.stop();
-                            audioChunksRef.current = [];
-                          }}
-                          className="text-gray-400 hover:text-gray-600 p-1"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={stopRecording}
-                          className="p-2 sm:p-3 bg-rose-500 text-white rounded-xl sm:rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95"
-                        >
-                          <Send className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                      </div>
+                      <VoiceRecorder 
+                        onRecordingComplete={handleVoiceRecordingComplete}
+                        onCancel={() => setIsRecording(false)}
+                      />
                     ) : (
                       <>
                         <div className="flex items-center gap-0.5 sm:gap-1">
@@ -1264,7 +1213,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                         {!newMessage.trim() && (
                           <button 
                             type="button" 
-                            onClick={startRecording}
+                            onClick={() => setIsRecording(true)}
                             className="p-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95 shrink-0"
                           >
                             <Mic className="w-5 h-5" />

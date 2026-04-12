@@ -10,9 +10,10 @@ import VerificationBadge from '../VerificationBadge';
 
 interface SuggestedUsersProps {
   onUserClick: (userId: string) => void;
+  onSeeAll?: () => void;
 }
 
-export default function SuggestedUsers({ onUserClick }: SuggestedUsersProps) {
+export default function SuggestedUsers({ onUserClick, onSeeAll }: SuggestedUsersProps) {
   const { user } = useAuth();
   const [suggestions, setSuggestions] = useState<Profile[]>([]);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
@@ -107,7 +108,10 @@ export default function SuggestedUsers({ onUserClick }: SuggestedUsersProps) {
           <Sparkles className="w-5 h-5 text-emerald-500" />
           <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Suggested for you</h3>
         </div>
-        <button className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+        <button 
+          onClick={onSeeAll}
+          className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline flex items-center gap-1"
+        >
           See All <ChevronRight className="w-3 h-3" />
         </button>
       </div>

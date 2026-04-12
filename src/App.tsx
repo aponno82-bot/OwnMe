@@ -128,6 +128,7 @@ export default function App() {
                   onUserClick={(id) => handleNavigate('profile', id)} 
                   onHashtagClick={(tag) => handleNavigate('hashtag', tag)}
                   onPostClick={(id) => handleNavigate('post', id)}
+                  onSeeAllSuggestions={() => handleNavigate('explore')}
                   highlightPostId={highlightPostId}
                 />
               } />

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { sendBrowserNotification } from '../lib/notifications';
 
-export type NotificationType = 'like' | 'comment' | 'follow' | 'message' | 'announcement' | 'group_invite' | 'group_post';
+export type NotificationType = 'like' | 'comment' | 'follow' | 'message' | 'announcement' | 'group_invite' | 'group_post' | 'tag_request';
 
 export async function createNotification(
   userId: string,
@@ -51,6 +51,9 @@ export async function createNotification(
           break;
         case 'group_post':
           body = `${actorName} posted in a group you're in`;
+          break;
+        case 'tag_request':
+          body = `${actorName} tagged you in a post. Approval required.`;
           break;
       }
 

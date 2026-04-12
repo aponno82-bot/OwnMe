@@ -68,12 +68,18 @@ export default function Explore({ onUserClick, onHashtagClick, onPostClick }: { 
   }, []);
 
   async function fetchProfiles() {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .limit(20);
-    
-    if (data) setProfiles(data);
+    try {
+      const { data: allProfiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', (await supabase.auth.getUser()).data.user?.id)
+        .limit(50);
+      
+      if (error) throw error;
+      if (allProfiles) setProfiles(allProfiles);
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
+    }
   }
 
   async function fetchTrendingPosts() {

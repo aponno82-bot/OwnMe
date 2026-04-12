@@ -100,7 +100,10 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
         ref={videoRef} 
         src={url} 
         className="w-full h-full object-contain"
-        onClick={togglePlay}
+        onClick={(e) => {
+          e.stopPropagation();
+          togglePlay();
+        }}
         referrerPolicy="no-referrer"
       />
 
@@ -118,6 +121,7 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
             step="0.1"
             value={currentTime}
             onChange={handleSeek}
+            onClick={(e) => e.stopPropagation()}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
           <div 
@@ -128,12 +132,19 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
 
         <div className="flex items-center justify-between text-white">
           <div className="flex items-center gap-4">
-            <button onClick={togglePlay} className="hover:text-emerald-400 transition-colors">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePlay();
+              }} 
+              className="hover:text-emerald-400 transition-colors"
+            >
               {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
             <div className="flex items-center gap-2">
               <button 
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (videoRef.current) {
                     videoRef.current.muted = !isMuted;
                     setIsMuted(!isMuted);
@@ -149,7 +160,13 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
             </span>
           </div>
 
-          <button onClick={toggleFullscreen} className="hover:text-emerald-400 transition-colors">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFullscreen();
+            }} 
+            className="hover:text-emerald-400 transition-colors"
+          >
             <Maximize className="w-5 h-5" />
           </button>
         </div>
@@ -158,7 +175,10 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
       {/* Big Play Button (when paused) */}
       {!isPlaying && (
         <button 
-          onClick={togglePlay}
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePlay();
+          }}
           className="absolute inset-0 flex items-center justify-center group/play"
         >
           <div className="w-16 h-16 rounded-full bg-emerald-500/90 text-white flex items-center justify-center shadow-2xl group-hover/play:scale-110 transition-transform">

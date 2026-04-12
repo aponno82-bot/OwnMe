@@ -831,14 +831,14 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
       )}
 
       {/* Actions */}
-      <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-        <div className="flex items-center gap-6">
+      <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 sm:gap-6 flex-1">
           <button 
             onClick={toggleLike}
             disabled={loading}
             className={cn(
-              "flex items-center gap-2 transition-colors group",
-              isLiked ? "text-rose-500" : "text-gray-500 hover:text-rose-500"
+              "flex-1 sm:flex-none flex items-center justify-center gap-2 transition-colors group py-2 rounded-xl",
+              isLiked ? "text-rose-500 bg-rose-50/50 sm:bg-transparent" : "text-gray-500 hover:text-rose-500 sm:hover:bg-transparent"
             )}
           >
             <div className={cn(
@@ -853,8 +853,8 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
           <button 
             onClick={() => setShowComments(!showComments)}
             className={cn(
-              "flex items-center gap-2 transition-colors group",
-              showComments ? "text-emerald-500" : "text-gray-500 hover:text-emerald-500"
+              "flex-1 sm:flex-none flex items-center justify-center gap-2 transition-colors group py-2 rounded-xl",
+              showComments ? "text-emerald-500 bg-emerald-50/50 sm:bg-transparent" : "text-gray-500 hover:text-emerald-500 sm:hover:bg-transparent"
             )}
           >
             <div className={cn(
@@ -868,7 +868,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
 
           <button 
             onClick={handleShare}
-            className="flex items-center gap-2 text-gray-500 hover:text-blue-500 transition-colors group"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-gray-500 hover:text-blue-500 transition-colors group py-2 rounded-xl hover:bg-blue-50/50 sm:hover:bg-transparent"
           >
             <div className="p-2 rounded-full group-hover:bg-blue-50 transition-colors">
               <Share2 className="w-5 h-5" />

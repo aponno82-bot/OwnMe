@@ -460,7 +460,7 @@ export default function Reels({ onUserClick }: { onUserClick: (id: string) => vo
 
   if (loading) {
     return (
-      <div className="h-[calc(100vh-120px)] flex items-center justify-center bg-black rounded-[32px]">
+      <div className="h-[calc(100vh-80px)] sm:h-[calc(100vh-120px)] flex items-center justify-center bg-black rounded-[24px] sm:rounded-[32px]">
         <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
       </div>
     );
@@ -468,7 +468,7 @@ export default function Reels({ onUserClick }: { onUserClick: (id: string) => vo
 
   if (reels.length === 0) {
     return (
-      <div className="h-[calc(100vh-120px)] flex flex-col items-center justify-center bg-black rounded-[32px] text-white p-8 text-center">
+      <div className="h-[calc(100vh-80px)] sm:h-[calc(100vh-120px)] flex flex-col items-center justify-center bg-black rounded-[24px] sm:rounded-[32px] text-white p-8 text-center">
         <Video className="w-16 h-16 text-gray-600 mb-4" />
         <h2 className="text-2xl font-bold mb-2">No Reels Yet</h2>
         <p className="text-gray-400">Be the first to share a video reel with the community!</p>
@@ -477,7 +477,7 @@ export default function Reels({ onUserClick }: { onUserClick: (id: string) => vo
   }
 
   return (
-    <div className="relative h-[calc(100vh-120px)] w-full max-w-[450px] mx-auto bg-black rounded-[32px] overflow-hidden shadow-2xl">
+    <div className="relative h-[calc(100vh-80px)] sm:h-[calc(100vh-120px)] w-full max-w-[450px] mx-auto bg-black rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-2xl">
       <div 
         ref={containerRef}
         onScroll={handleScroll}
@@ -496,8 +496,8 @@ export default function Reels({ onUserClick }: { onUserClick: (id: string) => vo
           ))}
       </div>
 
-      {/* Navigation Arrows */}
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-20">
+      {/* Navigation Arrows - Hidden on mobile */}
+      <div className="absolute left-4 top-1/2 -translate-y-1/2 hidden sm:flex flex-col gap-4 z-20">
         <button 
           onClick={() => containerRef.current?.scrollBy({ top: -containerRef.current.clientHeight, behavior: 'smooth' })}
           className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md"

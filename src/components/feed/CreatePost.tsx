@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Video, Smile, Send, X, Camera, Loader2, Users, Globe, Lock, Shield, Search } from 'lucide-react';
+import { Image as ImageIcon, Video, Smile, Send, X, Camera, Loader2, Users, Globe, Lock, Shield, Search, Mic } from 'lucide-react';
 import { Profile } from '../../types';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../../lib/utils';
@@ -24,6 +24,11 @@ export default function CreatePost() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [searching, setSearching] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const feelings = [
@@ -111,6 +116,74 @@ export default function CreatePost() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const file = new File([audioBlob], 'voice_post.webm', { type: 'audio/webm' });
+        
+        setUploading(true);
+        try {
+          const fileName = `${Math.random()}.webm`;
+          const filePath = `${user?.id}/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('media')
+            .upload(filePath, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('media')
+            .getPublicUrl(filePath);
+
+          setMediaUrl(publicUrl);
+          setMediaType('audio' as any);
+          toast.success('Voice recorded!');
+        } catch (error: any) {
+          toast.error(error.message);
+        } finally {
+          setUploading(false);
+        }
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      toast.error('Microphone access denied');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -265,6 +338,16 @@ export default function CreatePost() {
                   controls 
                   className="w-full aspect-video object-cover"
                 />
+              ) : mediaType === 'audio' ? (
+                <div className="w-full p-6 bg-emerald-50 rounded-2xl flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white">
+                    <Mic className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-emerald-900">Voice Note</p>
+                    <audio src={mediaUrl} controls className="w-full mt-2 h-8" />
+                  </div>
+                </div>
               ) : (
                 <img 
                   src={mediaUrl} 
@@ -286,6 +369,36 @@ export default function CreatePost() {
             </div>
           )}
 
+          {isRecording && (
+            <div className="mt-4 p-4 bg-rose-50 rounded-2xl flex items-center justify-between gap-4 border border-rose-100">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-rose-500 rounded-full animate-pulse" />
+                <span className="text-sm font-bold text-rose-600">Recording... {formatDuration(recordingDuration)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setIsRecording(false);
+                    clearInterval(timerRef.current);
+                    mediaRecorderRef.current?.stop();
+                    audioChunksRef.current = [];
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <button 
+                  type="button" 
+                  onClick={stopRecording}
+                  className="px-4 py-2 bg-rose-500 text-white rounded-xl font-bold text-xs hover:bg-rose-600 transition-all"
+                >
+                  Stop & Save
+                </button>
+              </div>
+            </div>
+          )}
+
           {uploading && (
             <div className="mt-4 p-8 bg-gray-50 rounded-2xl flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-200">
               <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -301,8 +414,8 @@ export default function CreatePost() {
             className="hidden"
           />
 
-          <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-            <div className="flex items-center gap-1">
+          <div className="mt-4 pt-4 border-t border-gray-50 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1">
               <button 
                 type="button"
                 onClick={() => {
@@ -313,7 +426,7 @@ export default function CreatePost() {
                 className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <ImageIcon className="w-5 h-5" />
-                <span className="text-xs font-bold hidden sm:inline">Photo</span>
+                <span className="text-xs font-bold">Photo</span>
               </button>
               <button 
                 type="button"
@@ -325,7 +438,7 @@ export default function CreatePost() {
                 className="p-2 hover:bg-blue-50 text-blue-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Video className="w-5 h-5" />
-                <span className="text-xs font-bold hidden sm:inline">Video</span>
+                <span className="text-xs font-bold">Video</span>
               </button>
               <button 
                 type="button" 
@@ -333,7 +446,7 @@ export default function CreatePost() {
                 className="p-2 hover:bg-amber-50 text-amber-600 rounded-xl transition-colors flex items-center gap-2"
               >
                 <Smile className="w-5 h-5" />
-                <span className="text-xs font-bold hidden sm:inline">Feeling</span>
+                <span className="text-xs font-bold">Feeling</span>
               </button>
               <button 
                 type="button" 
@@ -341,7 +454,18 @@ export default function CreatePost() {
                 className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors flex items-center gap-2"
               >
                 <Users className="w-5 h-5" />
-                <span className="text-xs font-bold hidden sm:inline">Tag</span>
+                <span className="text-xs font-bold">Tag</span>
+              </button>
+              <button 
+                type="button" 
+                onClick={isRecording ? stopRecording : startRecording}
+                className={cn(
+                  "p-2 rounded-xl transition-colors flex items-center gap-2",
+                  isRecording ? "bg-rose-50 text-rose-600" : "hover:bg-rose-50 text-rose-600"
+                )}
+              >
+                <Mic className="w-5 h-5" />
+                <span className="text-xs font-bold">{isRecording ? 'Stop' : 'Voice'}</span>
               </button>
             </div>
 

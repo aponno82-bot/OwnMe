@@ -78,7 +78,10 @@ export default function VoicePlayer({ url, isOwn }: VoicePlayerProps) {
       <audio ref={audioRef} src={url} />
       
       <button 
-        onClick={togglePlay}
+        onClick={(e) => {
+          e.stopPropagation();
+          togglePlay();
+        }}
         className={cn(
           "w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-sm",
           isOwn ? "bg-white text-emerald-600" : "bg-emerald-500 text-white"
@@ -100,6 +103,7 @@ export default function VoicePlayer({ url, isOwn }: VoicePlayerProps) {
             step="0.1"
             value={currentTime}
             onChange={handleSeek}
+            onClick={(e) => e.stopPropagation()}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
           <div 
@@ -113,7 +117,8 @@ export default function VoicePlayer({ url, isOwn }: VoicePlayerProps) {
       </div>
 
       <button 
-        onClick={() => {
+        onClick={(e) => {
+          e.stopPropagation();
           if (audioRef.current) {
             audioRef.current.muted = !isMuted;
             setIsMuted(!isMuted);

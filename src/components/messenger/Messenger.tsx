@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Phone, Video, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, PhoneIncoming, PhoneOutgoing, PhoneOff, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck, Trash2, Shield, Ban, MessageSquare, Heart, Smile, VideoOff, Share2, Edit3, Copy } from 'lucide-react';
+import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck, Trash2, Shield, Ban, MessageSquare, Heart, Smile, Share2, Edit3, Copy, Archive, Inbox, MessageSquareQuote } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Message, Profile, Connection } from '../../types';
@@ -12,7 +12,6 @@ import { sendBrowserNotification } from '../../lib/notifications';
 import { createNotification } from '../../services/notificationService';
 import VoicePlayer from './VoicePlayer';
 import VideoPlayer from './VideoPlayer';
-import CallModal from './CallModal';
 
 interface MessengerProps {
   initialContactId?: string | null;
@@ -51,6 +50,8 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
   const [activeMessageActions, setActiveMessageActions] = useState<string | null>(null);
   const [lastMessages, setLastMessages] = useState<Record<string, Message>>({});
   const [editValue, setEditValue] = useState('');
+  const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'archived'>('chats');
+  const [chatSettings, setChatSettings] = useState<Record<string, any>>({});
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,10 +78,16 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
   }, [activeChat]);
 
   useEffect(() => {
+    if (user) {
+      fetchContacts();
+    }
+  }, [user?.id, activeTab, connections, chatSettings]);
+
+  useEffect(() => {
     if (!user) return;
     
-    fetchContacts();
     fetchConnections();
+    fetchChatSettings();
     
     const channel = supabase
       .channel(`messages:${user.id}:${instanceId.current}`)
@@ -104,6 +111,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
               });
               markAsRead(msg.id);
             } else {
+              markAsDelivered(msg.id);
               fetchProfileForNotification(msg.sender_id, msg.content);
               toast.info(`New message from someone`);
             }
@@ -117,6 +125,9 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
         } else if (payload.eventType === 'UPDATE') {
           const updatedMsg = payload.new as Message;
           setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any).id;
+          setMessages(prev => prev.filter(m => m.id !== deletedId));
         }
       })
       .on('presence', { event: 'sync' }, () => {
@@ -252,11 +263,77 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     }
   }
 
+  async function fetchChatSettings() {
+    if (!user) return;
+    const { data } = await supabase
+      .from('chat_settings')
+      .select('*')
+      .eq('user_id', user.id);
+    
+    if (data) {
+      const settings: Record<string, any> = {};
+      data.forEach(s => {
+        settings[s.chat_partner_id] = s;
+      });
+      setChatSettings(settings);
+    }
+  }
+
+  async function toggleArchive(contactId: string) {
+    if (!user) return;
+    const isArchived = chatSettings[contactId]?.is_archived;
+    
+    const { error } = await supabase
+      .from('chat_settings')
+      .upsert({
+        user_id: user.id,
+        chat_partner_id: contactId,
+        is_archived: !isArchived,
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) {
+      toast.error('Failed to update archive status');
+    } else {
+      toast.success(isArchived ? 'Chat unarchived' : 'Chat archived');
+      fetchChatSettings();
+      if (!isArchived) setActiveChat(null);
+    }
+  }
+
+  async function markAsDelivered(messageId: string) {
+    await supabase.from('messages').update({ 
+      is_delivered: true,
+      delivered_at: new Date().toISOString(),
+      status: 'delivered'
+    }).eq('id', messageId);
+  }
+
   async function markAsRead(messageId: string) {
     await supabase.from('messages').update({ 
       is_read: true,
-      seen_at: new Date().toISOString()
+      seen_at: new Date().toISOString(),
+      status: 'seen'
     }).eq('id', messageId);
+  }
+
+  async function acceptRequest(contactId: string) {
+    if (!user) return;
+    const { error } = await supabase
+      .from('connections')
+      .upsert({
+        sender_id: user.id,
+        receiver_id: contactId,
+        status: 'accepted'
+      });
+
+    if (error) {
+      toast.error('Failed to accept request');
+    } else {
+      toast.success('Request accepted');
+      fetchConnections();
+      fetchContacts();
+    }
   }
 
   useEffect(() => {
@@ -304,12 +381,34 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
         const sortedProfiles = Array.from(contactIds)
           .map(id => profiles.find(p => p.id === id))
           .filter((p): p is Profile => !!p);
-        setContacts(sortedProfiles);
+        
+        // Filter based on activeTab and connections
+        const filteredProfiles = sortedProfiles.filter(p => {
+          const isArchived = chatSettings[p.id]?.is_archived;
+          const isAccepted = connections.some(c => 
+            (c.sender_id === user.id && c.receiver_id === p.id) || 
+            (c.sender_id === p.id && c.receiver_id === user.id)
+          );
+          
+          const lastMsg = lastMessages[p.id];
+          const iSentLast = lastMsg?.sender_id === user.id;
+
+          if (activeTab === 'archived') return isArchived;
+          if (isArchived) return false;
+          if (activeTab === 'requests') return !isAccepted && !iSentLast;
+          return isAccepted || iSentLast;
+        });
+
+        setContacts(filteredProfiles);
       }
     } else {
       // Fallback to some suggested contacts if no messages yet
       const { data: suggested } = await supabase.from('profiles').select('*').limit(10);
-      if (suggested) setContacts(suggested.filter(p => p.id !== user.id));
+      if (suggested) {
+        const filteredSuggested = suggested.filter(p => p.id !== user.id);
+        if (activeTab === 'chats') setContacts(filteredSuggested);
+        else setContacts([]);
+      }
     }
   }
 
@@ -502,46 +601,56 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     e.preventDefault();
     if (!newMessage.trim() || !activeChat || !user) return;
 
-    const isFollowing = connections.some(c => c.sender_id === user.id && c.receiver_id === activeChat.id);
-    
-    const messageObj = {
+    const messageObj: any = {
       sender_id: user.id,
       receiver_id: activeChat.id,
       content: newMessage.trim(),
-      // reply_to_id: replyingTo?.id || null // Removed due to missing column in schema
     };
 
-    const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
-    if (error) {
-      console.error('Send message error:', error);
-      toast.error(`Failed to send message: ${error.message}`);
-    } else {
+    // Only add reply_to_id if it's set
+    if (replyingTo) {
+      messageObj.reply_to_id = replyingTo.id;
+    }
+
+    try {
+      const { data, error } = await supabase.from('messages').insert(messageObj).select().single();
+      if (error) {
+        console.error('Send message error:', error);
+        // If it failed, maybe reply_to_id is missing? Try without it
+        if (replyingTo) {
+          const { data: retryData, error: retryError } = await supabase
+            .from('messages')
+            .insert({
+              sender_id: user.id,
+              receiver_id: activeChat.id,
+              content: newMessage.trim()
+            })
+            .select()
+            .single();
+          
+          if (retryError) throw retryError;
+          toast.warning('Reply context lost (database column missing)');
+        } else {
+          throw error;
+        }
+      }
+      
       setNewMessage('');
       setReplyingTo(null);
       setIsTyping(false);
       
-      // Keep focus on input for mobile keyboard
       requestAnimationFrame(() => {
         messageInputRef.current?.focus();
       });
       
-      // Send notification
       if (activeChat) {
         await createNotification(activeChat.id, user.id, 'message');
       }
+    } catch (error: any) {
+      console.error('Final send error:', error);
+      toast.error(`Failed to send message: ${error.message}`);
     }
   };
-
-  const startCall = async (type: 'audio' | 'video') => {
-    if (!activeChat || !user) return;
-    
-    // Dispatch global event
-    window.dispatchEvent(new CustomEvent('start-call', { 
-      detail: { contact: activeChat, type } 
-    }));
-  };
-
-  // acceptCall and endCall removed as they are handled globally
 
   const handleReact = async (messageId: string, emoji: string) => {
     if (!user) return;
@@ -566,33 +675,52 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
       updatedReactions[emoji] = newUserIds;
     }
 
-    const { error } = await supabase
-      .from('messages')
-      .update({ reactions: updatedReactions })
-      .eq('id', messageId);
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ reactions: updatedReactions })
+        .eq('id', messageId);
 
-    if (error) {
-      toast.error('Failed to react');
+      if (error) throw error;
+      
+      // Optimistic update
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions: updatedReactions } : m));
+    } catch (error: any) {
+      console.error('Reaction error:', error);
+      toast.error('Failed to react: ' + (error.message || 'Unknown error'));
     }
   };
 
   const handleEditMessage = async () => {
     if (!editingMessage || !editValue.trim()) return;
 
-    const { error } = await supabase
-      .from('messages')
-      .update({ 
-        content: editValue.trim(),
-        is_edited: true 
-      })
-      .eq('id', editingMessage.id);
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ 
+          content: editValue.trim(),
+          is_edited: true 
+        })
+        .eq('id', editingMessage.id);
 
-    if (error) {
-      toast.error('Failed to edit message');
-    } else {
+      if (error) {
+        console.error('Edit error:', error);
+        // Try without is_edited if it failed (maybe column missing)
+        const { error: retryError } = await supabase
+          .from('messages')
+          .update({ content: editValue.trim() })
+          .eq('id', editingMessage.id);
+        
+        if (retryError) throw retryError;
+      }
+      
       setMessages(prev => prev.map(m => m.id === editingMessage.id ? { ...m, content: editValue.trim(), is_edited: true } : m));
+      toast.success('Message updated');
       setEditingMessage(null);
       setEditValue('');
+    } catch (err: any) {
+      console.error('Edit catch error:', err);
+      toast.error('Failed to edit message: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -600,23 +728,25 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     if (!deletingMessage) return;
 
     try {
-      const { error } = await supabase
+      console.log('Attempting to unsend message:', deletingMessage.id);
+      const { error, status, statusText } = await supabase
         .from('messages')
         .delete()
         .eq('id', deletingMessage.id);
 
       if (error) {
-        console.error('Delete error:', error);
-        toast.error('Failed to delete message');
+        console.error('Delete error details:', { error, status, statusText });
+        toast.error(`Failed to unsend: ${error.message || 'Permission denied or database error'}`);
       } else {
+        console.log('Message unsent successfully from database');
         setMessages(prev => prev.filter(m => m.id !== deletingMessage.id));
-        toast.success('Message deleted');
+        toast.success('Message unsent');
         setDeletingMessage(null);
         setActiveMessageActions(null);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Delete catch error:', err);
-      toast.error('An unexpected error occurred');
+      toast.error(`An unexpected error occurred: ${err.message}`);
     }
   };
 
@@ -640,16 +770,6 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
           <FileText className="w-5 h-5" />
           <span className="text-xs font-medium truncate max-w-[150px]">{msg.content}</span>
         </a>
-      );
-    }
-    if (msg.media_type === 'call') {
-      return (
-        <div className="flex items-center gap-2 py-1">
-          {msg.media_url === 'video' ? <Video className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
-          <span className="text-xs font-bold">
-            {msg.sender_id === user?.id ? 'Outgoing' : 'Incoming'} {msg.media_url} call
-          </span>
-        </div>
       );
     }
     if (msg.media_type === 'audio') {
@@ -725,17 +845,19 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
               </div>
 
               <div className="flex items-center gap-1">
+                {activeTab === 'requests' && activeChat && (
+                  <button 
+                    onClick={() => acceptRequest(activeChat.id)}
+                    className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl hover:bg-emerald-600 transition-all active:scale-95 shadow-lg shadow-emerald-500/20 mr-2"
+                  >
+                    Accept Request
+                  </button>
+                )}
                 {!isSearchingChat && (
                   <button onClick={() => setIsSearchingChat(true)} className="p-2.5 hover:bg-gray-50 text-gray-500 rounded-2xl transition-all active:scale-90">
                     <Search className="w-5 h-5" />
                   </button>
                 )}
-                <button onClick={() => startCall('audio')} className="p-2.5 hover:bg-gray-50 text-gray-500 rounded-2xl transition-all active:scale-90">
-                  <Phone className="w-5 h-5" />
-                </button>
-                <button onClick={() => startCall('video')} className="p-2.5 hover:bg-gray-50 text-gray-500 rounded-2xl transition-all active:scale-90">
-                  <Video className="w-5 h-5" />
-                </button>
                 <div className="relative" ref={headerMenuRef}>
                   <button 
                     onClick={() => setIsHeaderMenuOpen(!isHeaderMenuOpen)}
@@ -750,18 +872,23 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50"
+                      className="absolute right-0 mt-2 w-56 bg-white rounded-3xl shadow-2xl border border-gray-100 py-3 z-50 overflow-hidden"
                     >
                       <button 
-                        onClick={() => {
-                          toast.success('Chat muted');
-                          setIsHeaderMenuOpen(false);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => toggleArchive(activeChat.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-700 transition-colors"
                       >
-                        <VolumeX className="w-4 h-4" />
-                        Mute Notifications
+                        <Archive className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-bold">{chatSettings[activeChat.id]?.is_archived ? 'Unarchive Chat' : 'Archive Chat'}</span>
                       </button>
+                      <button 
+                        onClick={() => onUserClick?.(activeChat.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-700 transition-colors"
+                      >
+                        <UserIcon className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-bold">View Profile</span>
+                      </button>
+                      <div className="h-px bg-gray-50 my-1 mx-4" />
                       <button 
                         onClick={async () => {
                           if (confirm('Are you sure you want to clear this chat?')) {
@@ -779,20 +906,31 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                           }
                           setIsHeaderMenuOpen(false);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-700 transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
-                        Clear Chat
+                        <Trash2 className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-bold">Clear Chat</span>
                       </button>
                       <button 
-                        onClick={() => {
-                          toast.error('User blocked');
+                        onClick={async () => {
+                          if (isBlocked) {
+                            await supabase.from('blocks').delete().eq('blocker_id', user?.id).eq('blocked_id', activeChat.id);
+                            setIsBlocked(false);
+                            toast.success('User unblocked');
+                          } else {
+                            await supabase.from('blocks').insert({ blocker_id: user?.id, blocked_id: activeChat.id });
+                            setIsBlocked(true);
+                            toast.success('User blocked');
+                          }
                           setIsHeaderMenuOpen(false);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                        className={cn(
+                          "w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors",
+                          isBlocked ? "text-emerald-600" : "text-rose-600"
+                        )}
                       >
-                        <ShieldAlert className="w-4 h-4" />
-                        Block User
+                        {isBlocked ? <Shield className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                        <span className="text-sm font-bold">{isBlocked ? 'Unblock User' : 'Block User'}</span>
                       </button>
                     </motion.div>
                   )}
@@ -811,14 +949,33 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                 <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
                   <div className="flex flex-col gap-1 max-w-[80%]">
                       {msg.reply_to_id && (
-                        <div className={cn(
-                          "text-[10px] px-3 py-1 bg-gray-100 rounded-t-xl border-l-2 border-emerald-500 text-gray-500 truncate",
-                          msg.sender_id === user?.id ? "mr-2" : "ml-2"
-                        )}>
-                          Replying to: {messages.find(m => m.id === msg.reply_to_id)?.content || 'Media'}
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const element = document.getElementById(`msg-${msg.reply_to_id}`);
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              element.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-2');
+                              setTimeout(() => {
+                                element.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-2');
+                              }, 2000);
+                            }
+                          }}
+                          className={cn(
+                            "text-[10px] px-3 py-2 bg-gray-50/80 backdrop-blur-sm rounded-t-2xl border-l-4 border-emerald-500 text-gray-500 mb-[-8px] pb-3 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors",
+                            msg.sender_id === user?.id ? "mr-2" : "ml-2"
+                          )}
+                        >
+                          <div className="font-bold text-emerald-600 mb-0.5 flex items-center gap-1">
+                            <MessageSquare className="w-2 h-2" />
+                            {messages.find(m => m.id === msg.reply_to_id)?.sender_id === user?.id ? 'You' : activeChat?.full_name || activeChat?.username}
+                          </div>
+                          <div className="truncate opacity-80">
+                            {messages.find(m => m.id === msg.reply_to_id)?.content || 'Media message'}
+                          </div>
                         </div>
                       )}
-                      <div className="relative group/msg">
+                      <div className="relative group/msg" id={`msg-${msg.id}`}>
                         <motion.div 
                           drag="x"
                           dragConstraints={{ left: 0, right: 100 }}
@@ -907,7 +1064,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                             <button 
                               onClick={() => setDeletingMessage(msg)}
                               className="p-2 bg-white border border-gray-100 rounded-full text-gray-400 hover:text-rose-500 shadow-sm"
-                              title="Delete"
+                              title="Unsend"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -923,8 +1080,8 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                           {msg.is_edited && <span className="text-[8px] uppercase tracking-tighter opacity-70 font-bold">(Edited)</span>}
                         </span>
                         {msg.sender_id === user?.id && (
-                          <div className="flex items-center">
-                            {msg.is_read ? (
+                          <div className="flex items-center gap-0.5">
+                            {msg.status === 'seen' || msg.is_read ? (
                               <div className="relative flex items-center">
                                 <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
                                 {activeChat?.avatar_url && (
@@ -937,6 +1094,8 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                                   />
                                 )}
                               </div>
+                            ) : msg.status === 'delivered' || msg.is_delivered ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-gray-300" />
                             ) : (
                               <Check className="w-3.5 h-3.5 text-gray-300" />
                             )}
@@ -1017,12 +1176,12 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                   </div>
                 )}
                 
-                <form onSubmit={handleSendMessage} className="p-4 bg-white/95 backdrop-blur-xl border-t border-gray-100/50 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
-                  <div className="flex items-center gap-3 max-w-4xl mx-auto">
+                <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white/95 backdrop-blur-xl border-t border-gray-100/50 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+                  <div className="flex items-center gap-2 sm:gap-3 max-w-4xl mx-auto">
                     {isRecording ? (
-                      <div className="flex-1 flex items-center gap-4 px-4 py-2 bg-rose-50 rounded-2xl">
+                      <div className="flex-1 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 bg-rose-50 rounded-2xl">
                         <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
-                        <span className="text-sm font-bold text-rose-600 flex-1">Recording... {formatDuration(recordingDuration)}</span>
+                        <span className="text-xs sm:text-sm font-bold text-rose-600 flex-1 truncate">Recording... {formatDuration(recordingDuration)}</span>
                         <button 
                           type="button" 
                           onClick={() => {
@@ -1031,25 +1190,25 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                             mediaRecorderRef.current?.stop();
                             audioChunksRef.current = [];
                           }}
-                          className="text-gray-400 hover:text-gray-600"
+                          className="text-gray-400 hover:text-gray-600 p-1"
                         >
                           <X className="w-5 h-5" />
                         </button>
                         <button 
                           type="button" 
                           onClick={stopRecording}
-                          className="p-3 bg-rose-500 text-white rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95"
+                          className="p-2 sm:p-3 bg-rose-500 text-white rounded-xl sm:rounded-2xl hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95"
                         >
-                          <Send className="w-5 h-5" />
+                          <Send className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5 sm:gap-1">
                           <button 
                             type="button" 
                             onClick={() => fileInputRef.current?.click()}
-                            className="p-2.5 hover:bg-gray-50 text-gray-400 rounded-xl transition-all active:scale-90"
+                            className="p-2 sm:p-2.5 hover:bg-gray-50 text-gray-400 rounded-xl transition-all active:scale-90"
                             title="Attach File"
                           >
                             <Paperclip className="w-5 h-5" />
@@ -1057,7 +1216,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                           <button 
                             type="button" 
                             onClick={() => fileInputRef.current?.click()}
-                            className="p-2.5 hover:bg-gray-50 text-gray-400 rounded-xl transition-all active:scale-90"
+                            className="hidden sm:block p-2.5 hover:bg-gray-50 text-gray-400 rounded-xl transition-all active:scale-90"
                             title="Upload Image"
                           >
                             <ImageIcon className="w-5 h-5" />
@@ -1066,7 +1225,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                             type="button" 
                             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                             className={cn(
-                              "p-2.5 hover:bg-gray-50 rounded-xl transition-all active:scale-90",
+                              "p-2 sm:p-2.5 hover:bg-gray-50 rounded-xl transition-all active:scale-90",
                               showEmojiPicker ? "text-emerald-500 bg-emerald-50" : "text-gray-400"
                             )}
                             title="Emoji Picker"
@@ -1091,12 +1250,12 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                               setNewMessage(e.target.value);
                               handleTyping();
                             }}
-                            className="w-full pl-6 pr-12 py-3.5 bg-gray-50/80 border border-transparent rounded-[24px] text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white focus:border-emerald-500/10 transition-all placeholder:text-gray-400"
+                            className="w-full pl-4 pr-10 py-2.5 bg-gray-50/80 border border-transparent rounded-[20px] text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white focus:border-emerald-500/10 transition-all placeholder:text-gray-400"
                           />
                           {newMessage.trim() && (
                             <button 
                               type="submit" 
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all active:scale-90"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all active:scale-90"
                             >
                               <Send className="w-5 h-5" />
                             </button>
@@ -1106,7 +1265,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                           <button 
                             type="button" 
                             onClick={startRecording}
-                            className="p-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95 shrink-0"
+                            className="p-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95 shrink-0"
                           >
                             <Mic className="w-5 h-5" />
                           </button>
@@ -1187,6 +1346,20 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                   <div className="p-4 bg-gray-50 text-gray-600 rounded-2xl"><Copy className="w-6 h-6" /></div>
                   <span className="text-[10px] font-bold text-gray-500 uppercase">Copy</span>
                 </button>
+                <button 
+                  onClick={() => { 
+                    const msg = messages.find(m => m.id === activeMessageActions);
+                    if (msg) {
+                      setEditingMessage(msg);
+                      setEditValue(msg.content);
+                    }
+                    setActiveMessageActions(null); 
+                  }} 
+                  className="flex flex-col items-center gap-2"
+                >
+                  <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl"><Edit3 className="w-6 h-6" /></div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Edit</span>
+                </button>
                 {messages.find(m => m.id === activeMessageActions)?.sender_id === user?.id && (
                   <button 
                     onClick={() => { 
@@ -1197,7 +1370,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                     className="flex flex-col items-center gap-2"
                   >
                     <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl"><Trash2 className="w-6 h-6" /></div>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">Delete</span>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase">Unsend</span>
                   </button>
                 )}
               </div>
@@ -1286,8 +1459,8 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
               <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Trash2 className="w-8 h-8 text-rose-500" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Message?</h3>
-              <p className="text-gray-500 mb-8 text-sm">This action will permanently remove the message. This cannot be undone.</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Unsend Message?</h3>
+              <p className="text-gray-500 mb-8 text-sm">This message will be removed for everyone in the chat. This action cannot be undone.</p>
               <div className="flex gap-3">
                 <button 
                   onClick={() => setDeletingMessage(null)}
@@ -1299,7 +1472,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                   onClick={handleDeleteMessage}
                   className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-full transition-all active:scale-95"
                 >
-                  Delete
+                  Unsend
                 </button>
               </div>
             </motion.div>
@@ -1418,6 +1591,40 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
             </div>
           )}
         </div>
+      </div>
+
+      {/* Tab Switcher */}
+      <div className="flex gap-2 mb-6 px-4 lg:px-0">
+        <button 
+          onClick={() => setActiveTab('chats')}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all relative",
+            activeTab === 'chats' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+          )}
+        >
+          <MessageCircle className="w-3.5 h-3.5" />
+          Chats
+        </button>
+        <button 
+          onClick={() => setActiveTab('requests')}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all relative",
+            activeTab === 'requests' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+          )}
+        >
+          <Inbox className="w-3.5 h-3.5" />
+          Requests
+        </button>
+        <button 
+          onClick={() => setActiveTab('archived')}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all relative",
+            activeTab === 'archived' ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+          )}
+        >
+          <Archive className="w-3.5 h-3.5" />
+          Archived
+        </button>
       </div>
 
       <div className="relative mb-8 px-4 lg:px-0 group">

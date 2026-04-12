@@ -20,7 +20,6 @@ import Settings from './components/settings/Settings';
 import AdminPanel from './components/admin/AdminPanel';
 import TrendingHashtags from './components/explore/TrendingHashtags';
 import HashtagFeed from './components/explore/HashtagFeed';
-import CallModal from './components/messenger/CallModal';
 import MobileSidebar from './components/layout/MobileSidebar';
 import { Users, Calendar } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
@@ -33,151 +32,6 @@ export default function App() {
   const location = useLocation();
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Global Call State
-  const [isCalling, setIsCalling] = useState<'audio' | 'video' | null>(null);
-  const [incomingCall, setIncomingCall] = useState<{ from: Profile; type: 'audio' | 'video' } | null>(null);
-  const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended' | null>(null);
-  const [callDuration, setCallDuration] = useState(0);
-  const [activeCallContact, setActiveCallContact] = useState<Profile | null>(null);
-  const callTimerRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase.channel(`calls:${user.id}`, {
-      config: {
-        broadcast: { self: true }
-      }
-    });
-
-    channel
-      .on('broadcast', { event: 'signal' }, async ({ payload }) => {
-        const { type: signalType, from, to, callType } = payload;
-        
-        if (to !== user.id) return;
-
-        if (signalType === 'START_CALL') {
-          const { data: caller } = await supabase.from('profiles').select('*').eq('id', from).single();
-          if (caller) {
-            setIncomingCall({ from: caller, type: callType });
-            setActiveCallContact(caller);
-            setCallStatus('ringing');
-          }
-        } else if (signalType === 'END_CALL') {
-          setCallStatus('ended');
-          clearInterval(callTimerRef.current);
-          setTimeout(() => {
-            setIncomingCall(null);
-            setIsCalling(null);
-            setCallStatus(null);
-            setActiveCallContact(null);
-            setCallDuration(0);
-          }, 2000);
-        } else if (signalType === 'ACCEPT_CALL') {
-          setCallStatus('connected');
-          setCallDuration(0);
-          clearInterval(callTimerRef.current);
-          callTimerRef.current = setInterval(() => {
-            setCallDuration(prev => prev + 1);
-          }, 1000);
-        }
-      })
-      .subscribe();
-
-    // Listen for local start-call events
-    const handleStartCall = (e: any) => {
-      const { contact, type } = e.detail;
-      setIsCalling(type);
-      setActiveCallContact(contact);
-      setCallStatus('ringing');
-      
-      channel.send({
-        type: 'broadcast',
-        event: 'signal',
-        payload: {
-          type: 'START_CALL',
-          from: user.id,
-          to: contact.id,
-          callType: type
-        }
-      });
-
-      // Also insert a message for history
-      supabase.from('messages').insert({
-        sender_id: user.id,
-        receiver_id: contact.id,
-        content: `Started ${type} call`,
-        media_type: 'call',
-        media_url: type,
-        is_read: false
-      });
-    };
-
-    window.addEventListener('start-call', handleStartCall);
-
-    return () => {
-      supabase.removeChannel(channel);
-      window.removeEventListener('start-call', handleStartCall);
-      clearInterval(callTimerRef.current);
-    };
-  }, [user]);
-
-  const handleAcceptCall = async () => {
-    if (!incomingCall || !user) return;
-    
-    const channel = supabase.channel(`calls:${incomingCall.from.id}`);
-    await channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        channel.send({
-          type: 'broadcast',
-          event: 'signal',
-          payload: {
-            type: 'ACCEPT_CALL',
-            from: user.id,
-            to: incomingCall.from.id
-          }
-        });
-      }
-    });
-
-    setCallStatus('connected');
-    setIsCalling(incomingCall.type);
-    setCallDuration(0);
-    clearInterval(callTimerRef.current);
-    callTimerRef.current = setInterval(() => {
-      setCallDuration(prev => prev + 1);
-    }, 1000);
-  };
-
-  const handleEndCall = async () => {
-    if (!user || !activeCallContact) return;
-    
-    const channel = supabase.channel(`calls:${activeCallContact.id}`);
-    await channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        channel.send({
-          type: 'broadcast',
-          event: 'signal',
-          payload: {
-            type: 'END_CALL',
-            from: user.id,
-            to: activeCallContact.id
-          }
-        });
-      }
-    });
-
-    setCallStatus('ended');
-    clearInterval(callTimerRef.current);
-    setTimeout(() => {
-      setIsCalling(null);
-      setIncomingCall(null);
-      setCallStatus(null);
-      setActiveCallContact(null);
-      setCallDuration(0);
-    }, 2000);
-  };
 
   const handleNotificationClick = async (notification: any) => {
     // Mark as read
@@ -194,16 +48,6 @@ export default function App() {
 
   useEffect(() => {
     requestNotificationPermission();
-    if (user) {
-      // Request camera and microphone permissions
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(stream => {
-          stream.getTracks().forEach(track => track.stop());
-        })
-        .catch(err => {
-          console.log('Media permissions denied or not available:', err);
-        });
-    }
   }, [user]);
 
   const handleNavigate = (page: string, id?: string) => {
@@ -268,7 +112,7 @@ export default function App() {
       
       <main className={cn(
         "flex-1 container mx-auto px-4 py-6 lg:py-8 lg:mb-0",
-        !isMessengerPage ? "mt-[72px] mb-20" : "mt-0 mb-0 lg:mt-[72px]"
+        !isMessengerPage ? "mt-[72px] mb-14" : "mt-0 mb-0 lg:mt-[72px]"
       )}>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Sidebar - Navigation */}
@@ -345,19 +189,6 @@ export default function App() {
         currentPage={currentPage}
       />
       
-      <AnimatePresence>
-        {(isCalling || incomingCall) && activeCallContact && (
-          <CallModal 
-            type={isCalling || incomingCall?.type || 'audio'}
-            status={callStatus || 'ringing'}
-            contact={activeCallContact}
-            isIncoming={!!incomingCall && !isCalling}
-            onEnd={handleEndCall}
-            onAccept={handleAcceptCall}
-          />
-        )}
-      </AnimatePresence>
-
       <Toaster position="top-right" richColors />
     </div>
   );

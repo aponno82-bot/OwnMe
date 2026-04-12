@@ -361,8 +361,8 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
 
         {/* Profile Info */}
         <div className="px-6 pb-8 relative">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-6 -mt-12 sm:-mt-16 mb-6">
-            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-[32px] bg-white p-1 shadow-xl relative z-10 group">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6 -mt-12 sm:-mt-16 mb-6">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-[32px] bg-white p-1 shadow-xl relative z-10 group mx-auto sm:mx-0">
               <div className="w-full h-full rounded-[28px] bg-gray-100 overflow-hidden relative">
                 {profile?.avatar_url ? (
                   <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -394,10 +394,10 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
               </div>
             </div>
             
-            <div className="flex-1">
+            <div className="flex-1 text-center sm:text-left">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{profile?.full_name || profile?.username}</h1>
                     {profile?.is_verified && (
                       <VerificationBadge size="lg" />
@@ -405,7 +405,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                   </div>
                   <p className="text-gray-500 font-medium">@{profile?.username}</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap justify-center sm:justify-end gap-3">
                   {isOwnProfile ? (
                     <button 
                       onClick={() => setIsEditModalOpen(true)}
@@ -415,7 +415,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                       Edit Profile
                     </button>
                   ) : (
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap justify-center sm:justify-end gap-3">
                       <button 
                         onClick={toggleFollow}
                         disabled={followLoading}
@@ -554,22 +554,22 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                   </div>
                 </div>
 
-                <div className="flex gap-8 pt-2">
+                <div className="flex justify-center sm:justify-start gap-8 pt-2">
                   <button 
                     onClick={() => setShowConnectionsModal('followers')}
-                    className="flex flex-col hover:opacity-70 transition-opacity"
+                    className="flex flex-col items-center sm:items-start hover:opacity-70 transition-opacity"
                   >
                     <span className="text-lg font-bold text-gray-900">{followerCount}</span>
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-bold">Followers</span>
                   </button>
                   <button 
                     onClick={() => setShowConnectionsModal('following')}
-                    className="flex flex-col hover:opacity-70 transition-opacity"
+                    className="flex flex-col items-center sm:items-start hover:opacity-70 transition-opacity"
                   >
                     <span className="text-lg font-bold text-gray-900">{followingCount}</span>
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-bold">Following</span>
                   </button>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col items-center sm:items-start">
                     <span className="text-lg font-bold text-gray-900">{posts.length}</span>
                     <span className="text-xs text-gray-400 uppercase tracking-wider font-bold">Posts</span>
                   </div>
@@ -581,7 +581,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
 
         {/* Tabs */}
         {!isBlocked && !isBlockingMe && (
-          <div className="px-6 border-t border-gray-50 flex gap-8">
+          <div className="px-4 sm:px-6 border-t border-gray-50 flex justify-between sm:justify-start sm:gap-8">
             {[
               { id: 'posts', label: 'Posts', icon: Grid },
               { id: 'media', label: 'Media', icon: List },
@@ -598,7 +598,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                 )}
               >
                 <tab.icon className="w-4 h-4" />
-                {tab.label}
+                <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
           </div>

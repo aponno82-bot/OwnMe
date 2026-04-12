@@ -254,9 +254,9 @@ export default function CreatePost() {
   };
 
   return (
-    <div className="card-premium p-4 sm:p-6 mb-6">
-      <div className="flex gap-4">
-        <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 shadow-sm">
+    <div className="card-premium p-3 sm:p-4 mb-4">
+      <div className="flex gap-3">
+        <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 shadow-sm">
           {profile?.avatar_url ? (
             <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           ) : (
@@ -266,7 +266,7 @@ export default function CreatePost() {
           )}
         </div>
         <form onSubmit={handleSubmit} className="flex-1">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-2">
             <div className="relative">
               <button 
                 type="button"
@@ -335,7 +335,7 @@ export default function CreatePost() {
             placeholder={`What's on your mind, ${profile?.full_name?.split(' ')[0] || 'friend'}?`}
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full bg-transparent border-none focus:ring-0 text-lg placeholder:text-gray-400 resize-none min-h-[100px] outline-none font-medium"
+            className="w-full bg-transparent border-none focus:ring-0 text-base placeholder:text-gray-400 resize-none min-h-[60px] outline-none font-medium"
           />
 
           {mediaUrl && (
@@ -422,7 +422,7 @@ export default function CreatePost() {
             className="hidden"
           />
 
-          <div className="mt-4 pt-4 border-t border-gray-50 flex flex-wrap items-center justify-between gap-2">
+          <div className="mt-3 pt-3 border-t border-gray-50 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1">
               <button 
                 type="button"
@@ -431,9 +431,9 @@ export default function CreatePost() {
                   setTimeout(() => fileInputRef.current?.click(), 0);
                 }}
                 disabled={uploading}
-                className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="p-1.5 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
               >
-                <ImageIcon className="w-5 h-5" />
+                <ImageIcon className="w-4 h-4" />
                 <span className="text-xs font-bold hidden sm:inline">Photo</span>
               </button>
               <button 
@@ -443,36 +443,36 @@ export default function CreatePost() {
                   setTimeout(() => fileInputRef.current?.click(), 0);
                 }}
                 disabled={uploading}
-                className="p-2 hover:bg-blue-50 text-blue-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
               >
-                <Video className="w-5 h-5" />
+                <Video className="w-4 h-4" />
                 <span className="text-xs font-bold hidden sm:inline">Video</span>
               </button>
               <button 
                 type="button" 
                 onClick={() => setIsFeelingModalOpen(true)}
-                className="p-2 hover:bg-amber-50 text-amber-600 rounded-xl transition-colors flex items-center gap-2"
+                className="p-1.5 hover:bg-amber-50 text-amber-600 rounded-xl transition-colors flex items-center gap-2"
               >
-                <Smile className="w-5 h-5" />
+                <Smile className="w-4 h-4" />
                 <span className="text-xs font-bold hidden sm:inline">Feeling</span>
               </button>
               <button 
                 type="button" 
                 onClick={() => setIsTagModalOpen(true)}
-                className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors flex items-center gap-2"
+                className="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors flex items-center gap-2"
               >
-                <Users className="w-5 h-5" />
+                <Users className="w-4 h-4" />
                 <span className="text-xs font-bold hidden sm:inline">Tag</span>
               </button>
               <button 
                 type="button" 
                 onClick={isRecording ? stopRecording : startRecording}
                 className={cn(
-                  "p-2 rounded-xl transition-colors flex items-center gap-2",
+                  "p-1.5 rounded-xl transition-colors flex items-center gap-2",
                   isRecording ? "bg-rose-50 text-rose-600" : "hover:bg-rose-50 text-rose-600"
                 )}
               >
-                <Mic className="w-5 h-5" />
+                <Mic className="w-4 h-4" />
                 <span className="text-xs font-bold hidden sm:inline">{isRecording ? 'Stop' : 'Voice'}</span>
               </button>
             </div>

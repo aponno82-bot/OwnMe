@@ -106,17 +106,15 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
         .single();
 
       if (post) {
-        const pendingTags = post.pending_tags || [];
         const taggedUsers = post.tagged_users || [];
+        if (taggedUsers.includes(notification.actor_id)) return;
 
-        // 2. Move user from pending to tagged
-        const newPending = pendingTags.filter((id: string) => id !== user.id);
-        const newTagged = [...taggedUsers, user.id];
+        // 2. Add user to tagged
+        const newTagged = [...taggedUsers, notification.actor_id];
 
         await supabase
           .from('posts')
           .update({
-            pending_tags: newPending,
             tagged_users: newTagged
           })
           .eq('id', post.id);
@@ -139,29 +137,13 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
     if (!notification.post_id || !user) return;
 
     try {
-      const { data: post } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('id', notification.post_id)
-        .single();
+      await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notification.id);
 
-      if (post) {
-        const pendingTags = post.pending_tags || [];
-        const newPending = pendingTags.filter((id: string) => id !== user.id);
-
-        await supabase
-          .from('posts')
-          .update({ pending_tags: newPending })
-          .eq('id', post.id);
-
-        await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('id', notification.id);
-
-        toast.success('Tag declined');
-        fetchNotifications();
-      }
+      toast.success('Tag declined');
+      fetchNotifications();
     } catch (error: any) {
       toast.error(error.message);
     }

@@ -271,7 +271,7 @@ export default function StoryBar() {
         {/* Create Story */}
         <div 
           onClick={() => fileInputRef.current?.click()}
-          className="flex-shrink-0 w-32 h-48 rounded-[24px] bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-gray-100 hover:border-emerald-300 transition-all group relative overflow-hidden"
+          className="flex-shrink-0 w-32 h-40 rounded-[24px] bg-gray-50 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-gray-100 hover:border-emerald-300 transition-all group relative overflow-hidden"
         >
           {uploading ? (
             <div className="flex flex-col items-center gap-2">
@@ -303,7 +303,7 @@ export default function StoryBar() {
               setActiveUserIndex(index);
               setActiveStoryIndex(0);
             }}
-            className="flex-shrink-0 w-32 h-48 rounded-[24px] overflow-hidden relative cursor-pointer group border-2 border-transparent hover:border-emerald-500 transition-all"
+            className="flex-shrink-0 w-32 h-40 rounded-[24px] overflow-hidden relative cursor-pointer group border-2 border-transparent hover:border-emerald-500 transition-all"
           >
             <img 
               src={group.stories[0].image_url} 

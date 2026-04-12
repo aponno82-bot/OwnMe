@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2, Mic } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send, User as UserIcon, Trash2, AlertCircle, Globe, Users, Lock, Edit3, Flag, X, Loader2, Mic, Check, Search, Plus } from 'lucide-react';
 import VerificationBadge from '../VerificationBadge';
 import { Post, Comment } from '../../types';
 import { formatDate, cn, formatRelativeTime } from '../../lib/utils';
@@ -36,6 +36,11 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
   const [isUpdating, setIsUpdating] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [taggedProfiles, setTaggedProfiles] = useState<any[]>([]);
+  const [pendingTags, setPendingTags] = useState<any[]>([]);
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -133,6 +138,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
     fetchLikesCount();
     fetchCommentsCount();
     fetchTaggedProfiles();
+    if (isOwnPost) fetchPendingTags();
 
     const channel = supabase
       .channel(`post-stats-${post.id}-${instanceId}`)
@@ -215,6 +221,116 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
     
     if (data) setTaggedProfiles(data);
   }
+
+  async function fetchPendingTags() {
+    if (!isOwnPost) return;
+    
+    const { data } = await supabase
+      .from('notifications')
+      .select('*, profiles:actor_id (*)')
+      .eq('post_id', post.id)
+      .eq('type', 'tag_request')
+      .eq('is_read', false);
+    
+    if (data) setPendingTags(data);
+  }
+
+  async function handleApproveTag(notificationId: string, taggedUserId: string) {
+    try {
+      const currentTags = post.tagged_users || [];
+      if (currentTags.includes(taggedUserId)) return;
+
+      const { error: postError } = await supabase
+        .from('posts')
+        .update({
+          tagged_users: [...currentTags, taggedUserId]
+        })
+        .eq('id', post.id);
+
+      if (postError) throw postError;
+
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+
+      if (notifError) throw notifError;
+
+      toast.success('Tag approved!');
+      fetchPendingTags();
+      fetchTaggedProfiles();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  }
+
+  async function handleDeclineTag(notificationId: string) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+
+      toast.success('Tag declined');
+      fetchPendingTags();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  }
+
+  const handleSearchUsers = async (query: string) => {
+    setSearchQuery(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .ilike('username', `%${query}%`)
+      .neq('id', user?.id)
+      .limit(5);
+    setSearchResults(data || []);
+    setSearching(false);
+  };
+
+  const handleRequestTag = async (targetUserId: string) => {
+    if (!user) return;
+    try {
+      // Check if already tagged
+      if (post.tagged_users?.includes(targetUserId)) {
+        toast.error('User is already tagged');
+        return;
+      }
+
+      // Check if already requested
+      const { data: existing } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('post_id', post.id)
+        .eq('user_id', post.user_id)
+        .eq('actor_id', targetUserId)
+        .eq('type', 'tag_request')
+        .eq('is_read', false)
+        .single();
+
+      if (existing) {
+        toast.error('Tag request already pending');
+        return;
+      }
+
+      await createNotification(post.user_id, targetUserId, 'tag_request', post.id);
+      toast.success('Tag request sent to post author!');
+      setIsTagModalOpen(false);
+      setSearchQuery('');
+      setSearchResults([]);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
 
   function subscribeToComments() {
     const channel = supabase
@@ -666,6 +782,33 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                   </span>
                 </span>
               )}
+              {pendingTags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {pendingTags.map((notif) => (
+                    <div key={notif.id} className="flex items-center gap-2 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg">
+                      <span className="text-[10px] text-amber-700 font-medium">
+                        Tag request: @{notif.profiles?.username}
+                      </span>
+                      <div className="flex gap-1">
+                        <button 
+                          onClick={() => handleApproveTag(notif.id, notif.actor_id)}
+                          className="p-0.5 hover:bg-emerald-100 text-emerald-600 rounded transition-colors"
+                          title="Approve"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeclineTag(notif.id)}
+                          className="p-0.5 hover:bg-rose-100 text-rose-600 rounded transition-colors"
+                          title="Decline"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <p className="text-[10px] text-gray-400 font-medium">{formatRelativeTime(post.created_at)}</p>
@@ -721,6 +864,16 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                 >
                   <Share2 className="w-4 h-4" />
                   Copy Link
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsTagModalOpen(true);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  Tag Someone
                 </button>
                 {isOwnPost ? (
                   <>
@@ -1125,6 +1278,79 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Tag Modal */}
+      <AnimatePresence>
+        {isTagModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[32px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+                <h2 className="text-xl font-bold">Tag Someone</h2>
+                <button onClick={() => setIsTagModalOpen(false)} className="p-2 hover:bg-gray-50 rounded-full">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="relative mb-6">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text"
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchUsers(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                </div>
+
+                <div className="space-y-2 max-h-[40vh] overflow-y-auto no-scrollbar">
+                  {searching ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    searchResults.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleRequestTag(p.id)}
+                        className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-gray-50 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                            {p.avatar_url ? (
+                              <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold">
+                                {p.username[0].toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <h4 className="text-sm font-bold text-gray-900">{p.full_name || p.username}</h4>
+                            <p className="text-[10px] text-gray-400 font-medium">@{p.username}</p>
+                          </div>
+                        </div>
+                        <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center">
+                          <Plus className="w-4 h-4" />
+                        </div>
+                      </button>
+                    ))
+                  ) : searchQuery.length >= 2 ? (
+                    <p className="text-center py-8 text-gray-400 text-sm">No users found</p>
+                  ) : (
+                    <p className="text-center py-8 text-gray-400 text-sm">Type to search for users</p>
+                  )}
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

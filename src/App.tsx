@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAuth } from './lib/useAuth';
+import { useBadges } from './lib/useBadges';
 import { Toaster } from 'sonner';
 import { requestNotificationPermission } from './lib/notifications';
 import AuthForm from './components/auth/AuthForm';
@@ -28,6 +29,7 @@ import { cn } from './lib/utils';
 
 export default function App() {
   const { user, profile, loading } = useAuth();
+  const { refreshNotifications } = useBadges();
   const navigate = useNavigate();
   const location = useLocation();
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export default function App() {
   const handleNotificationClick = async (notification: any) => {
     // Mark as read
     await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
+    refreshNotifications();
 
     if (notification.type === 'message') {
       navigate(`/messages/${notification.actor_id}`);

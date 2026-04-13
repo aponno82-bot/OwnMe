@@ -202,13 +202,31 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
   }, [showComments, post.id]);
 
   async function fetchComments() {
-    const { data } = await supabase
-      .from('comments')
-      .select('*, profiles (*), comment_reactions (*)')
-      .eq('post_id', post.id)
-      .order('created_at', { ascending: true });
-    
-    if (data) setComments(data);
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .select('*, profiles (*), comment_reactions (*)')
+        .eq('post_id', post.id)
+        .order('created_at', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching comments:', error);
+        // Fallback without reactions if that's the issue
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('comments')
+          .select('*, profiles (*)')
+          .eq('post_id', post.id)
+          .order('created_at', { ascending: true });
+        
+        if (fallbackError) throw fallbackError;
+        setComments(fallbackData || []);
+      } else {
+        setComments(data || []);
+      }
+    } catch (error: any) {
+      console.error('Final error fetching comments:', error);
+      toast.error('Failed to load comments');
+    }
   }
 
   async function fetchTaggedProfiles() {
@@ -349,17 +367,37 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
   }
 
   async function fetchNewCommentWithProfile(commentId: string) {
-    const { data } = await supabase
-      .from('comments')
-      .select('*, profiles (*), comment_reactions (*)')
-      .eq('id', commentId)
-      .single();
-    
-    if (data) {
-      setComments(prev => {
-        if (prev.find(c => c.id === data.id)) return prev;
-        return [...prev, data];
-      });
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .select('*, profiles (*), comment_reactions (*)')
+        .eq('id', commentId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching new comment:', error);
+        // Fallback without reactions
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('comments')
+          .select('*, profiles (*)')
+          .eq('id', commentId)
+          .single();
+        
+        if (fallbackError) throw fallbackError;
+        if (fallbackData) {
+          setComments(prev => {
+            if (prev.find(c => c.id === fallbackData.id)) return prev;
+            return [...prev, fallbackData];
+          });
+        }
+      } else if (data) {
+        setComments(prev => {
+          if (prev.find(c => c.id === data.id)) return prev;
+          return [...prev, data];
+        });
+      }
+    } catch (error: any) {
+      console.error('Catch error in fetchNewCommentWithProfile:', error);
     }
   }
 
@@ -528,6 +566,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
       
       setNewComment('');
       setReplyingTo(null);
+      setCommentsCount(prev => prev + 1);
       fetchComments(); // Refresh comments
     } catch (error: any) {
       toast.error(error.message);
@@ -546,6 +585,7 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
 
       if (error) throw error;
       setComments(prev => prev.filter(c => c.id !== commentId));
+      setCommentsCount(prev => Math.max(0, prev - 1));
       toast.success('Comment deleted');
     } catch (error: any) {
       toast.error(error.message);

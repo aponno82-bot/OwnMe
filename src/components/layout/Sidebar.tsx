@@ -1,6 +1,7 @@
 import { Home, Compass, Bell, MessageSquare, Users, Flag, Calendar, Settings, User, PlayCircle, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../lib/useAuth';
+import { useBadges } from '../../lib/useBadges';
 
 interface SidebarProps {
   onNavigate: (page: any) => void;
@@ -9,14 +10,15 @@ interface SidebarProps {
 
 export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
   const { profile } = useAuth();
+  const { unreadNotifications, unreadMessages } = useBadges();
   const isAdmin = profile?.role === 'admin';
 
   const menuItems = [
     { id: 'feed', label: 'News Feed', icon: Home },
     { id: 'explore', label: 'Explore', icon: Compass },
     { id: 'reels', label: 'Reels', icon: PlayCircle },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'messages', label: 'Messages', icon: MessageSquare },
+    { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifications },
+    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages },
     { id: 'profile', label: 'My Profile', icon: User },
   ];
 
@@ -39,7 +41,7 @@ export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
-                "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-200 group",
+                "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-200 group relative",
                 currentPage === item.id 
                   ? "bg-emerald-50 text-emerald-600" 
                   : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
@@ -50,7 +52,12 @@ export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
                 currentPage === item.id ? "text-emerald-600" : "text-gray-400 group-hover:text-gray-900"
               )} />
               <span className="font-medium">{item.label}</span>
-              {currentPage === item.id && (
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className="ml-auto bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              )}
+              {currentPage === item.id && !item.badge && (
                 <div className="ml-auto w-1.5 h-1.5 bg-emerald-500 rounded-full" />
               )}
             </button>

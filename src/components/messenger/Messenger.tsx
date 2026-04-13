@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, MoreHorizontal, MessageCircle, Send, User as UserIcon, Paperclip, Image as ImageIcon, FileText, Mic, X, Loader2, ChevronLeft, ShieldAlert, VolumeX, Check, CheckCheck, Trash2, Shield, Ban, MessageSquare, Heart, Smile, Share2, Edit3, Copy, Archive, Inbox, MessageSquareQuote } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
+import { useBadges } from '../../lib/useBadges';
 import { Message, Profile, Connection } from '../../types';
 import { toast } from 'sonner';
 import { usePresence } from '../../lib/usePresence';
@@ -22,6 +23,7 @@ interface MessengerProps {
 
 export default function Messenger({ initialContactId, onUserClick, onNavigate }: MessengerProps) {
   const { user, profile } = useAuth();
+  const { refreshMessages: refreshBadgeCount } = useBadges();
   const { isUserOnline } = usePresence();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -50,6 +52,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [activeMessageActions, setActiveMessageActions] = useState<string | null>(null);
   const [lastMessages, setLastMessages] = useState<Record<string, Message>>({});
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [editValue, setEditValue] = useState('');
   const [activeTab, setActiveTab] = useState<'chats' | 'requests' | 'archived'>('chats');
   const [chatSettings, setChatSettings] = useState<Record<string, any>>({});
@@ -89,6 +92,22 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     
     fetchConnections();
     fetchChatSettings();
+
+    // Mark all as read when entering the messenger
+    const markAllAsReadOnMount = async () => {
+      const { error } = await supabase
+        .from('messages')
+        .update({ is_read: true, seen_at: new Date().toISOString(), status: 'seen' })
+        .eq('receiver_id', user.id)
+        .eq('is_read', false);
+      
+      if (!error) {
+        refreshBadgeCount();
+        fetchContacts(); // Refresh the contact list badges
+      }
+    };
+    
+    markAllAsReadOnMount();
     
     const channel = supabase
       .channel(`messages:${user.id}:${instanceId.current}`)
@@ -113,6 +132,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
               markAsRead(msg.id);
             } else {
               markAsDelivered(msg.id);
+              fetchContacts(); // Refresh contact list to show unread badge
               fetchProfileForNotification(msg.sender_id, msg.content);
               toast.info(`New message from someone`);
             }
@@ -316,6 +336,8 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
       seen_at: new Date().toISOString(),
       status: 'seen'
     }).eq('id', messageId);
+    refreshBadgeCount();
+    fetchContacts(); // Refresh local counts
   }
 
   async function acceptRequest(contactId: string) {
@@ -370,6 +392,19 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     });
 
     setLastMessages(lastMsgs);
+
+    // Fetch unread counts for all contacts
+    const { data: unreadData } = await supabase
+      .from('messages')
+      .select('sender_id')
+      .eq('receiver_id', user.id)
+      .eq('is_read', false);
+    
+    const counts: Record<string, number> = {};
+    unreadData?.forEach(msg => {
+      counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1;
+    });
+    setUnreadCounts(counts);
 
     if (contactIds.size > 0) {
       const { data: profiles } = await supabase
@@ -456,8 +491,15 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
       if (unreadIds.length > 0) {
         await supabase
           .from('messages')
-          .update({ is_read: true, seen_at: new Date().toISOString() })
+          .update({ 
+            is_read: true, 
+            seen_at: new Date().toISOString(),
+            status: 'seen'
+          })
           .in('id', unreadIds);
+        
+        refreshBadgeCount();
+        fetchContacts(); // Also refresh local unread counts for the sidebar
       }
     }
   }
@@ -1628,20 +1670,27 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate font-medium flex items-center gap-1">
-                    {lastMessages[contact.id] ? (
-                      <>
-                        {lastMessages[contact.id].sender_id === user?.id && (
-                          <span className="text-emerald-500">You: </span>
-                        )}
-                        {lastMessages[contact.id].media_type === 'image' ? 'Sent an image' : 
-                         lastMessages[contact.id].media_type === 'audio' ? 'Sent a voice message' :
-                         lastMessages[contact.id].content}
-                      </>
-                    ) : (
-                      isUserOnline(contact.id) ? 'Active now' : 'Tap to open chat'
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-gray-500 truncate font-medium flex items-center gap-1 flex-1">
+                      {lastMessages[contact.id] ? (
+                        <>
+                          {lastMessages[contact.id].sender_id === user?.id && (
+                            <span className="text-emerald-500">You: </span>
+                          )}
+                          {lastMessages[contact.id].media_type === 'image' ? 'Sent an image' : 
+                           lastMessages[contact.id].media_type === 'audio' ? 'Sent a voice message' :
+                           lastMessages[contact.id].content}
+                        </>
+                      ) : (
+                        isUserOnline(contact.id) ? 'Active now' : 'Tap to open chat'
+                      )}
+                    </p>
+                    {unreadCounts[contact.id] > 0 && (
+                      <span className="min-w-[18px] h-[18px] px-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm shadow-emerald-500/20">
+                        {unreadCounts[contact.id]}
+                      </span>
                     )}
-                  </p>
+                  </div>
                 </div>
               </button>
             ))}

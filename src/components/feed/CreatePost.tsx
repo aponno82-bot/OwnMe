@@ -254,7 +254,7 @@ export default function CreatePost() {
   };
 
   return (
-    <div className="card-premium p-3 sm:p-4 mb-4">
+    <div className="card-premium p-2 sm:p-3 mb-4">
       <div className="flex gap-3">
         <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 shadow-sm">
           {profile?.avatar_url ? (
@@ -335,7 +335,7 @@ export default function CreatePost() {
             placeholder={`What's on your mind, ${profile?.full_name?.split(' ')[0] || 'friend'}?`}
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full bg-transparent border-none focus:ring-0 text-base placeholder:text-gray-400 resize-none min-h-[60px] outline-none font-medium"
+            className="w-full bg-transparent border-none focus:ring-0 text-sm placeholder:text-gray-400 resize-none min-h-[40px] outline-none font-medium"
           />
 
           {mediaUrl && (

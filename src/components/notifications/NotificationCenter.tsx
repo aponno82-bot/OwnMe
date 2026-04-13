@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
+import { useBadges } from '../../lib/useBadges';
 import { Notification } from '../../types';
 import { formatDate, cn } from '../../lib/utils';
 import { Bell, Heart, MessageCircle, UserPlus, MessageSquare, UserCheck, Check, X as XIcon } from 'lucide-react';
@@ -15,6 +16,7 @@ interface NotificationCenterProps {
 
 export default function NotificationCenter({ onUserClick, onNotificationClick }: NotificationCenterProps) {
   const { user } = useAuth();
+  const { refreshNotifications: refreshBadgeCount } = useBadges();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,16 +24,38 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
     if (!user) return;
 
     fetchNotifications();
+    
+    // Mark all as read when entering the notification center
+    const markAsReadOnMount = async () => {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      
+      if (!error) {
+        refreshBadgeCount();
+        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      }
+    };
+    
+    markAsReadOnMount();
 
     const channel = supabase
       .channel(`notifications:${user.id}`)
       .on('postgres_changes', { 
-        event: 'INSERT', 
+        event: '*', 
         schema: 'public', 
         table: 'notifications',
         filter: `user_id=eq.${user.id}` 
       }, (payload) => {
-        fetchNewNotificationWithProfile(payload.new.id);
+        if (payload.eventType === 'INSERT') {
+          fetchNewNotificationWithProfile(payload.new.id);
+        } else if (payload.eventType === 'UPDATE') {
+          setNotifications(prev => prev.map(n => n.id === payload.new.id ? { ...n, ...payload.new } : n));
+        } else if (payload.eventType === 'DELETE') {
+          setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
+        }
       })
       .subscribe();
 
@@ -127,6 +151,7 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
 
         toast.success('Tag approved!');
         fetchNotifications();
+        refreshBadgeCount();
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -144,6 +169,26 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
 
       toast.success('Tag declined');
       fetchNotifications();
+      refreshBadgeCount();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      if (error) throw error;
+      
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      refreshBadgeCount();
+      toast.success('All notifications marked as read');
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -162,10 +207,20 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-bold text-gray-900">Notifications</h2>
-        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full uppercase">
-          {notifications.filter(n => !n.is_read).length} New
-        </span>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold text-gray-900">Notifications</h2>
+          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full uppercase">
+            {notifications.filter(n => !n.is_read).length} New
+          </span>
+        </div>
+        {notifications.some(n => !n.is_read) && (
+          <button 
+            onClick={handleMarkAllAsRead}
+            className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors uppercase tracking-wider"
+          >
+            Mark all as read
+          </button>
+        )}
       </div>
 
       <div className="space-y-1">

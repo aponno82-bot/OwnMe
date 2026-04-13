@@ -1,6 +1,7 @@
 import { Home, Compass, Bell, MessageSquare, User, PlayCircle, Shield, Menu } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../lib/useAuth';
+import { useBadges } from '../../lib/useBadges';
 
 interface BottomNavProps {
   onNavigate: (page: any) => void;
@@ -10,13 +11,14 @@ interface BottomNavProps {
 
 export default function BottomNav({ onNavigate, currentPage, onOpenMenu }: BottomNavProps) {
   const { profile } = useAuth();
+  const { unreadNotifications, unreadMessages } = useBadges();
   const isAdmin = profile?.role === 'admin';
 
   const items = [
     { id: 'feed', icon: Home, label: 'Home' },
     { id: 'reels', icon: PlayCircle, label: 'Reels' },
-    { id: 'messages', icon: MessageSquare, label: 'Chat' },
-    { id: 'notifications', icon: Bell, label: 'Alerts' },
+    { id: 'messages', icon: MessageSquare, label: 'Chat', badge: unreadMessages },
+    { id: 'notifications', icon: Bell, label: 'Alerts', badge: unreadNotifications },
   ];
 
   return (
@@ -26,11 +28,18 @@ export default function BottomNav({ onNavigate, currentPage, onOpenMenu }: Botto
           key={item.id}
           onClick={() => onNavigate(item.id)}
           className={cn(
-            "flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-all active:scale-95",
+            "flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-all active:scale-95 relative",
             currentPage === item.id ? "text-emerald-500" : "text-gray-400"
           )}
         >
-          <item.icon className={cn("w-5 h-5", currentPage === item.id && "fill-emerald-500/10")} />
+          <div className="relative">
+            <item.icon className={cn("w-5 h-5", currentPage === item.id && "fill-emerald-500/10")} />
+            {item.badge !== undefined && item.badge > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-rose-500 text-white text-[8px] font-bold rounded-full border border-white flex items-center justify-center">
+                {item.badge > 9 ? '9+' : item.badge}
+              </span>
+            )}
+          </div>
           <span className="text-[9px] font-bold uppercase tracking-tight">{item.label}</span>
         </button>
       ))}

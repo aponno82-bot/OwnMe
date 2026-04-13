@@ -4,13 +4,19 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
 import { PresenceProvider } from './lib/PresenceContext';
+import { BadgeProvider } from './lib/BadgeContext';
+import { AuthProvider } from './lib/AuthContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <PresenceProvider>
-        <App />
-      </PresenceProvider>
+      <AuthProvider>
+        <PresenceProvider>
+          <BadgeProvider>
+            <App />
+          </BadgeProvider>
+        </PresenceProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 );

@@ -1,6 +1,7 @@
 import { Search, Bell, MessageCircle, User, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
+import { useBadges } from '../../lib/useBadges';
 import { cn } from '../../lib/utils';
 
 interface NavbarProps {
@@ -10,6 +11,7 @@ interface NavbarProps {
 
 export default function Navbar({ onNavigate, currentPage }: NavbarProps) {
   const { profile } = useAuth();
+  const { unreadNotifications, unreadMessages } = useBadges();
 
   return (
     <nav className="fixed top-0 left-0 right-0 h-16 glass z-50">
@@ -40,6 +42,21 @@ export default function Navbar({ onNavigate, currentPage }: NavbarProps) {
         {/* Actions */}
         <div className="flex items-center gap-2 sm:gap-4">
           <button 
+            onClick={() => onNavigate('messages')}
+            className={cn(
+              "p-2 rounded-full hover:bg-gray-50 transition-colors relative",
+              currentPage === 'messages' && "text-emerald-500 bg-emerald-50"
+            )}
+          >
+            <MessageCircle className="w-5 h-5" />
+            {unreadMessages > 0 && (
+              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center shadow-sm">
+                {unreadMessages > 99 ? '99+' : unreadMessages}
+              </span>
+            )}
+          </button>
+
+          <button 
             onClick={() => onNavigate('notifications')}
             className={cn(
               "p-2 rounded-full hover:bg-gray-50 transition-colors relative",
@@ -47,7 +64,11 @@ export default function Navbar({ onNavigate, currentPage }: NavbarProps) {
             )}
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-emerald-500 rounded-full border-2 border-white"></span>
+            {unreadNotifications > 0 && (
+              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center shadow-sm">
+                {unreadNotifications > 99 ? '99+' : unreadNotifications}
+              </span>
+            )}
           </button>
           
           <div 

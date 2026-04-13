@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { useAuth } from './useAuth';
 
 interface BadgeContextType {
   unreadNotifications: number;
   unreadMessages: number;
-  refreshNotifications: () => void;
-  refreshMessages: () => void;
+  refreshNotifications: (optimisticCount?: number) => void;
+  refreshMessages: (optimisticCount?: number) => void;
 }
 
 const BadgeContext = createContext<BadgeContextType | undefined>(undefined);
@@ -17,8 +17,59 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const fetchUnreadNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      
+      if (!error) {
+        setUnreadNotifications(count || 0);
+      }
+    } catch (err) {
+      console.error('Fetch Notifications Error:', err);
+    }
+  }, [user?.id]);
+
+  const fetchUnreadMessages = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { count, error } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('receiver_id', user.id)
+        .eq('is_read', false);
+      
+      if (!error) {
+        setUnreadMessages(count || 0);
+      }
+    } catch (err) {
+      console.error('Fetch Messages Error:', err);
+    }
+  }, [user?.id]);
+
+  const fetchUnreadCounts = useCallback((optNotifications?: number, optMessages?: number) => {
+    if (optNotifications !== undefined) setUnreadNotifications(optNotifications);
+    if (optMessages !== undefined) setUnreadMessages(optMessages);
+
+    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+    
+    refreshTimeoutRef.current = setTimeout(async () => {
+      if (!user) return;
+      await Promise.all([
+        optNotifications === undefined ? fetchUnreadNotifications() : Promise.resolve(),
+        optMessages === undefined ? fetchUnreadMessages() : Promise.resolve()
+      ]);
+    }, 800);
+  }, [user?.id, fetchUnreadNotifications, fetchUnreadMessages]);
+
+  const refreshNotifications = useCallback((count?: number) => fetchUnreadCounts(count, undefined), [fetchUnreadCounts]);
+  const refreshMessages = useCallback((count?: number) => fetchUnreadCounts(undefined, count), [fetchUnreadCounts]);
+
   useEffect(() => {
-    console.log('BadgeContext: User state changed:', user?.id);
     if (!user) {
       setUnreadNotifications(0);
       setUnreadMessages(0);
@@ -31,39 +82,23 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
       if (channel) supabase.removeChannel(channel);
 
       channel = supabase
-        .channel(`user-badges-${user.id}`)
+        .channel(`user-badges-${user.id}-${Math.random().toString(36).substring(7)}`)
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
           table: 'notifications',
           filter: `user_id=eq.${user.id}`
-        }, (payload) => {
-          console.log('Badge Realtime (Notifications):', payload);
-          fetchUnreadCounts();
-        })
+        }, () => fetchUnreadCounts())
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
           table: 'messages',
           filter: `receiver_id=eq.${user.id}`
-        }, (payload) => {
-          console.log('Badge Realtime (Messages - Inbound):', payload);
-          fetchUnreadCounts();
-        })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `sender_id=eq.${user.id}`
-        }, (payload) => {
-          console.log('Badge Realtime (Messages - Outbound):', payload);
-          fetchUnreadCounts();
-        })
+        }, () => fetchUnreadCounts())
         .subscribe((status) => {
-          console.log(`Badge subscription status for ${user.id}:`, status);
           if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-            console.error('Realtime channel error/closed. Retrying in 5s...');
-            setTimeout(subscribe, 5000);
+            const timer = setTimeout(subscribe, 5000);
+            return () => clearTimeout(timer);
           }
         });
     };
@@ -71,15 +106,9 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
     subscribe();
     fetchUnreadCounts();
 
-    // Refresh when window gets focus or internet returns
-    const handleRefresh = () => {
-      console.log('Refreshing badges (focus/online)...');
-      fetchUnreadCounts();
-    };
+    const handleRefresh = () => fetchUnreadCounts();
     window.addEventListener('focus', handleRefresh);
     window.addEventListener('online', handleRefresh);
-
-    // Fallback interval every 30 seconds
     const interval = setInterval(fetchUnreadCounts, 30000);
 
     return () => {
@@ -89,68 +118,14 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
       clearInterval(interval);
       if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
     };
-  }, [user?.id]);
-
-  function fetchUnreadCounts() {
-    console.log('Triggering badge refresh (debounced)...');
-    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
-    
-    refreshTimeoutRef.current = setTimeout(async () => {
-      if (!user) return;
-      console.log('Executing badge refresh...');
-      await Promise.all([
-        fetchUnreadNotifications(),
-        fetchUnreadMessages()
-      ]);
-    }, 300);
-  }
-
-  async function fetchUnreadNotifications() {
-    if (!user) return;
-    try {
-      const { count, error } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-      
-      if (!error) {
-        console.log(`Unread notifications count for ${user.id}:`, count);
-        setUnreadNotifications(count || 0);
-      } else {
-        console.error('Error fetching unread notifications:', error);
-      }
-    } catch (err) {
-      console.error('Exception in fetchUnreadNotifications:', err);
-    }
-  }
-
-  async function fetchUnreadMessages() {
-    if (!user) return;
-    try {
-      const { count, error } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('receiver_id', user.id)
-        .eq('is_read', false);
-      
-      if (!error) {
-        console.log(`Unread messages count for ${user.id}:`, count);
-        setUnreadMessages(count || 0);
-      } else {
-        console.error('Error fetching unread messages:', error);
-      }
-    } catch (err) {
-      console.error('Exception in fetchUnreadMessages:', err);
-    }
-  }
+  }, [user?.id, fetchUnreadCounts]);
 
   return (
     <BadgeContext.Provider value={{ 
       unreadNotifications, 
       unreadMessages, 
-      refreshNotifications: fetchUnreadCounts,
-      refreshMessages: fetchUnreadCounts
+      refreshNotifications,
+      refreshMessages
     }}>
       {children}
     </BadgeContext.Provider>

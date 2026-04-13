@@ -1,4 +1,4 @@
-import { Home, Compass, Bell, MessageSquare, Users, Flag, Calendar, Settings, User, PlayCircle, Shield } from 'lucide-react';
+import { Home, Compass, Bell, MessageSquare, Users, Flag, Calendar, Settings, User, PlayCircle, Shield, Star } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../lib/useAuth';
 import { useBadges } from '../../lib/useBadges';
@@ -52,6 +52,9 @@ export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
                 currentPage === item.id ? "text-emerald-600" : "text-gray-400 group-hover:text-gray-900"
               )} />
               <span className="font-medium">{item.label}</span>
+              {item.id === 'profile' && profile?.is_premium && (
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+              )}
               {item.badge !== undefined && item.badge > 0 && (
                 <span className="ml-auto bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                   {item.badge > 99 ? '99+' : item.badge}

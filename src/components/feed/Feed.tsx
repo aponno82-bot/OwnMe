@@ -57,14 +57,24 @@ export default function Feed({ onUserClick, onHashtagClick, onPostClick, onSeeAl
 
   async function fetchBlockedIds() {
     if (!user) return;
-    const { data } = await supabase
+    
+    // Fetch users I blocked
+    const { data: blockedByMe } = await supabase
       .from('blocks')
       .select('blocked_id')
       .eq('blocker_id', user.id);
     
-    if (data) {
-      setBlockedIds(data.map(b => b.blocked_id));
-    }
+    // Fetch users who blocked me
+    const { data: blockingMe } = await supabase
+      .from('blocks')
+      .select('blocker_id')
+      .eq('blocked_id', user.id);
+    
+    const ids = new Set<string>();
+    if (blockedByMe) blockedByMe.forEach(b => ids.add(b.blocked_id));
+    if (blockingMe) blockingMe.forEach(b => ids.add(b.blocker_id));
+    
+    setBlockedIds(Array.from(ids));
   }
 
   async function fetchFollowingIds() {

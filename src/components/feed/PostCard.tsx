@@ -421,6 +421,40 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
     if (count !== null) setLikesCount(count);
   }
 
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [isBlockingMe, setIsBlockingMe] = useState(false);
+
+  useEffect(() => {
+    if (user && post.user_id !== user.id) {
+      checkBlockStatus();
+    }
+  }, [user, post.user_id]);
+
+  async function checkBlockStatus() {
+    if (!user || post.user_id === user.id) return;
+    try {
+      const { data: blockedByMe } = await supabase
+        .from('blocks')
+        .select('*')
+        .eq('blocker_id', user.id)
+        .eq('blocked_id', post.user_id)
+        .single();
+      
+      setIsBlocked(!!blockedByMe);
+
+      const { data: blockedByThem } = await supabase
+        .from('blocks')
+        .select('*')
+        .eq('blocker_id', post.user_id)
+        .eq('blocked_id', user.id)
+        .single();
+      
+      setIsBlockingMe(!!blockedByThem);
+    } catch (error) {
+      // Ignore errors
+    }
+  }
+
   const toggleSave = async () => {
     if (!user) {
       toast.error('Please sign in to save posts');
@@ -1123,10 +1157,11 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
         <div className="flex items-center gap-1 sm:gap-6 flex-1">
           <button 
             onClick={toggleLike}
-            disabled={loading}
+            disabled={loading || isBlocked || isBlockingMe}
             className={cn(
               "flex-1 sm:flex-none flex items-center justify-center gap-2 transition-colors group py-2 rounded-xl",
-              isLiked ? "text-rose-500 bg-rose-50/50 sm:bg-transparent" : "text-gray-500 hover:text-rose-500 sm:hover:bg-transparent"
+              isLiked ? "text-rose-500 bg-rose-50/50 sm:bg-transparent" : "text-gray-500 hover:text-rose-500 sm:hover:bg-transparent",
+              (isBlocked || isBlockingMe) && "opacity-50 cursor-not-allowed"
             )}
           >
             <div className={cn(
@@ -1140,9 +1175,11 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
           
           <button 
             onClick={() => setShowComments(!showComments)}
+            disabled={isBlocked || isBlockingMe}
             className={cn(
               "flex-1 sm:flex-none flex items-center justify-center gap-2 transition-colors group py-2 rounded-xl",
-              showComments ? "text-emerald-500 bg-emerald-50/50 sm:bg-transparent" : "text-gray-500 hover:text-emerald-500 sm:hover:bg-transparent"
+              showComments ? "text-emerald-500 bg-emerald-50/50 sm:bg-transparent" : "text-gray-500 hover:text-emerald-500 sm:hover:bg-transparent",
+              (isBlocked || isBlockingMe) && "opacity-50 cursor-not-allowed"
             )}
           >
             <div className={cn(
@@ -1188,43 +1225,53 @@ export default function PostCard({ post, onUserClick, onHashtagClick, onPostClic
               {renderCommentThread(null)}
 
               <form onSubmit={handleAddComment} className="flex flex-col gap-2 pt-4">
-                {replyingTo && (
-                  <div className="flex items-center justify-between px-3 py-1 bg-emerald-50 rounded-lg">
-                    <span className="text-[10px] font-bold text-emerald-600">
-                      Replying to {replyingTo.profiles?.full_name || replyingTo.profiles?.username}
-                    </span>
-                    <button onClick={() => setReplyingTo(null)} className="text-emerald-400 hover:text-emerald-600">
-                      <X className="w-3 h-3" />
-                    </button>
+                {(isBlocked || isBlockingMe) ? (
+                  <div className="p-4 bg-gray-50 rounded-2xl text-center">
+                    <p className="text-xs font-bold text-gray-400">
+                      {isBlocked ? 'You have blocked this user' : 'You cannot comment on this post'}
+                    </p>
                   </div>
-                )}
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold">
-                        {profile?.username?.[0]?.toUpperCase()}
+                ) : (
+                  <>
+                    {replyingTo && (
+                      <div className="flex items-center justify-between px-3 py-1 bg-emerald-50 rounded-lg">
+                        <span className="text-[10px] font-bold text-emerald-600">
+                          Replying to {replyingTo.profiles?.full_name || replyingTo.profiles?.username}
+                        </span>
+                        <button onClick={() => setReplyingTo(null)} className="text-emerald-400 hover:text-emerald-600">
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     )}
-                  </div>
-                  <div className="flex-1 relative">
-                    <input 
-                      type="text" 
-                      placeholder={replyingTo ? "Write a reply..." : "Write a comment..."}
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 pr-10"
-                    />
-                    <button 
-                      type="submit"
-                      disabled={isSubmittingComment || !newComment.trim()}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-500 hover:text-emerald-600 disabled:opacity-50"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
+                        {profile?.avatar_url ? (
+                          <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold">
+                            {profile?.username?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 relative">
+                        <input 
+                          type="text" 
+                          placeholder={replyingTo ? "Write a reply..." : "Write a comment..."}
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 pr-10"
+                        />
+                        <button 
+                          type="submit"
+                          disabled={isSubmittingComment || !newComment.trim()}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-500 hover:text-emerald-600 disabled:opacity-50"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </form>
             </div>
           </motion.div>

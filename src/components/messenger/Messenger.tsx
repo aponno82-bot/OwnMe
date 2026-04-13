@@ -105,7 +105,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
         .eq('is_read', false);
       
       if (!error) {
-        refreshBadgeCount();
+        refreshBadgeCount(0);
         fetchContacts(); // Refresh the contact list badges
       }
     };
@@ -132,7 +132,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
                 if (prev.some(m => m.id === msg.id)) return prev;
                 return [...prev, msg];
               });
-              markAsRead(msg.id);
+              markAsRead(msg.id, msg.sender_id);
             } else {
               markAsDelivered(msg.id);
               fetchContacts(); // Refresh contact list to show unread badge
@@ -160,13 +160,17 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
           fetchContacts();
         }
       })
+      .subscribe();
+
+    // Separate channel for listening to typing indicators directed at ME
+    const typingChannel = supabase.channel(`typing-listener:${user.id}`)
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
+        const state = typingChannel.presenceState();
         const typing: string[] = [];
         Object.keys(state).forEach(key => {
           const presences = state[key] as any[];
           presences.forEach(p => {
-            if (p.isTyping && p.typingTo === user.id) {
+            if (p.isTyping) {
               typing.push(p.userId);
             }
           });
@@ -177,27 +181,27 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(typingChannel);
     };
   }, [user?.id]);
 
-  // Handle typing indicator
+  // Handle tracking MY typing status to the active chat partner
   useEffect(() => {
     if (!user || !activeChat) return;
 
-    const channel = supabase.channel(`typing:${activeChat.id}`);
+    const trackChannel = supabase.channel(`typing-broadcast:${activeChat.id}`);
     
-    channel.subscribe(async (status) => {
+    trackChannel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({
+        await trackChannel.track({
           userId: user.id,
-          isTyping: isTyping,
-          typingTo: activeChat.id
+          isTyping: isTyping
         });
       }
     });
 
     return () => {
-      channel.unsubscribe();
+      trackChannel.unsubscribe();
     };
   }, [isTyping, activeChat?.id, user?.id]);
 
@@ -339,14 +343,28 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
     }).eq('id', messageId);
   }
 
-  async function markAsRead(messageId: string) {
-    await supabase.from('messages').update({ 
+  async function markAsRead(messageId: string, senderId?: string) {
+    const sId = senderId || messages.find(m => m.id === messageId)?.sender_id;
+    
+    if (sId) {
+      setUnreadCounts(prev => ({ 
+        ...prev, 
+        [sId]: Math.max(0, (prev[sId] || 0) - 1) 
+      }));
+    }
+
+    const { error } = await supabase.from('messages').update({ 
       is_read: true,
       seen_at: new Date().toISOString(),
       status: 'seen'
     }).eq('id', messageId);
-    refreshBadgeCount();
-    fetchContacts(); // Refresh local counts
+
+    if (error) {
+      console.error('Error marking message as read:', error);
+    } else {
+      refreshBadgeCount();
+      fetchContacts(); // Refresh local counts
+    }
   }
 
   async function acceptRequest(contactId: string) {
@@ -498,6 +516,11 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
         .map(m => m.id);
       
       if (unreadIds.length > 0) {
+        // Optimistically clear local count for this contact
+        if (activeChat) {
+          setUnreadCounts(prev => ({ ...prev, [activeChat.id]: 0 }));
+        }
+        
         await supabase
           .from('messages')
           .update({ 
@@ -1124,7 +1147,7 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
                     </div>
                   </div>
                 ))}
-                {typingUsers.length > 0 && activeChat && (
+                {typingUsers.length > 0 && activeChat && typingUsers.includes(activeChat.id) && (
                   <div className="flex justify-start">
                     <div className="flex items-end gap-2">
                       <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0 border border-gray-100">
@@ -1136,7 +1159,8 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
                           </div>
                         )}
                       </div>
-                      <div className="bg-white border border-gray-100 px-4 py-2.5 rounded-2xl rounded-bl-none flex items-center gap-2 shadow-sm">
+                      <div className="bg-white border border-gray-100 px-4 py-2.5 rounded-2xl rounded-bl-none flex flex-col gap-1 shadow-sm">
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Typing...</span>
                         <div className="flex gap-1">
                           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />

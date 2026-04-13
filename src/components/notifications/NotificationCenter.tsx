@@ -34,7 +34,7 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
         .eq('is_read', false);
       
       if (!error) {
-        refreshBadgeCount();
+        refreshBadgeCount(0);
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       }
     };
@@ -187,7 +187,7 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
       if (error) throw error;
       
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      refreshBadgeCount();
+      refreshBadgeCount(0);
       toast.success('All notifications marked as read');
     } catch (error: any) {
       toast.error(error.message);

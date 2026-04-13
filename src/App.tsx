@@ -5,7 +5,7 @@ import { useAuth } from './lib/useAuth';
 import { useBadges } from './lib/useBadges';
 import { Toaster } from 'sonner';
 import { requestNotificationPermission } from './lib/notifications';
-import AuthForm from './components/auth/AuthForm';
+import GuestPage from './components/auth/GuestPage';
 import Navbar from './components/layout/Navbar';
 import Sidebar from './components/layout/Sidebar';
 import Feed from './components/feed/Feed';
@@ -103,7 +103,7 @@ export default function App() {
   if (!user) {
     return (
       <>
-        <AuthForm />
+        <GuestPage />
         <Toaster position="top-right" richColors />
       </>
     );

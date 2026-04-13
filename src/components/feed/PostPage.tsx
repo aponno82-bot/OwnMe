@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/useAuth';
 import { Post } from '../../types';
 import PostCard from '../feed/PostCard';
 import { ChevronLeft, Loader2 } from 'lucide-react';
@@ -11,6 +12,9 @@ export default function PostPage() {
   const navigate = useNavigate();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [isBlockingMe, setIsBlockingMe] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (postId) {
@@ -29,6 +33,26 @@ export default function PostPage() {
 
       if (error) throw error;
       setPost(data);
+
+      if (user && data.user_id !== user.id) {
+        const { data: blockedByMe } = await supabase
+          .from('blocks')
+          .select('*')
+          .eq('blocker_id', user.id)
+          .eq('blocked_id', data.user_id)
+          .single();
+        
+        setIsBlocked(!!blockedByMe);
+
+        const { data: blockedByThem } = await supabase
+          .from('blocks')
+          .select('*')
+          .eq('blocker_id', data.user_id)
+          .eq('blocked_id', user.id)
+          .single();
+        
+        setIsBlockingMe(!!blockedByThem);
+      }
     } catch (error: any) {
       console.error('Error fetching post:', error);
     } finally {
@@ -44,13 +68,21 @@ export default function PostPage() {
     );
   }
 
-  if (!post) {
+  if (!post || isBlocked || isBlockingMe) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Post not found</h2>
+      <div className="text-center py-20 card-premium">
+        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Loader2 className="w-8 h-8 text-gray-300" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">
+          {isBlockingMe ? 'You are blocked' : isBlocked ? 'User Blocked' : 'Post not found'}
+        </h2>
+        <p className="text-gray-500 mb-6">
+          {isBlockingMe ? 'You cannot view this content.' : isBlocked ? 'Unblock this user to see their posts.' : 'This post may have been deleted.'}
+        </p>
         <button 
           onClick={() => navigate(-1)}
-          className="text-emerald-600 font-bold hover:underline"
+          className="btn-primary px-8 py-2"
         >
           Go back
         </button>

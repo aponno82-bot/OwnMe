@@ -1,4 +1,4 @@
-import { Search, Bell, MessageCircle, User, LogOut } from 'lucide-react';
+import { Search, User, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { useBadges } from '../../lib/useBadges';
@@ -41,45 +41,17 @@ export default function Navbar({ onNavigate, currentPage }: NavbarProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-2 sm:gap-4">
-          <button 
-            onClick={() => onNavigate('messages')}
-            className={cn(
-              "p-2 rounded-full hover:bg-gray-50 transition-colors relative",
-              currentPage === 'messages' && "text-emerald-500 bg-emerald-50"
-            )}
-          >
-            <MessageCircle className="w-5 h-5" />
-            {unreadMessages > 0 && (
-              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center shadow-sm">
-                {unreadMessages > 99 ? '99+' : unreadMessages}
-              </span>
-            )}
-          </button>
-
-          <button 
-            onClick={() => onNavigate('notifications')}
-            className={cn(
-              "p-2 rounded-full hover:bg-gray-50 transition-colors relative",
-              currentPage === 'notifications' && "text-emerald-500 bg-emerald-50"
-            )}
-          >
-            <Bell className="w-5 h-5" />
-            {unreadNotifications > 0 && (
-              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center shadow-sm">
-                {unreadNotifications > 99 ? '99+' : unreadNotifications}
-              </span>
-            )}
-          </button>
-          
           <div 
-            className="flex items-center gap-3 pl-2 sm:pl-4 sm:border-l border-gray-100 cursor-pointer group"
+            className="flex items-center gap-3 pl-2 sm:pl-4 cursor-pointer group"
             onClick={() => onNavigate('profile')}
           >
             <div className="text-right hidden sm:block">
               <p className="text-sm font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
                 {profile?.full_name || profile?.username || 'User'}
               </p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Premium Member</p>
+              {profile?.is_premium && (
+                <p className="text-[10px] text-amber-500 uppercase tracking-wider font-bold">Premium Member</p>
+              )}
             </div>
             <div className="w-10 h-10 rounded-full bg-gray-100 border-2 border-white shadow-sm overflow-hidden group-hover:border-emerald-500 transition-all">
               {profile?.avatar_url ? (

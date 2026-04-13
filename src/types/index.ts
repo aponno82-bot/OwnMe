@@ -9,8 +9,10 @@ export interface Profile {
   workplace: string | null;
   address: string | null;
   school: string | null;
+  created_at?: string;
   updated_at?: string;
   is_verified?: boolean;
+  is_premium?: boolean;
   role?: 'admin' | 'user';
   read_receipts_enabled?: boolean;
   is_private?: boolean;

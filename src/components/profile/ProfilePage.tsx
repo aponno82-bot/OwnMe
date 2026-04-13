@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/useAuth';
 import { Post, Profile } from '../../types';
 import PostCard from '../feed/PostCard';
-import { Edit3, MapPin, Link as LinkIcon, Calendar, Grid, List, Heart, X, Camera, MessageCircle, MoreHorizontal, ShieldAlert, Flag, Copy, Loader2, Shield, Bookmark } from 'lucide-react';
+import { Edit3, MapPin, Link as LinkIcon, Calendar, Grid, List, Heart, X, Camera, MessageCircle, MoreHorizontal, ShieldAlert, Flag, Copy, Loader2, Shield, Bookmark, Briefcase, GraduationCap, Star } from 'lucide-react';
 import VerificationBadge from '../VerificationBadge';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,6 +25,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'media' | 'saved'>('posts');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [followerCount, setFollowerCount] = useState(0);
@@ -339,7 +340,9 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsUpdating(true);
     const { error } = await updateProfile(editForm);
+    setIsUpdating(false);
     if (error) {
       toast.error(error.message);
     } else {
@@ -429,11 +432,17 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                     {profile?.is_verified && (
                       <VerificationBadge size="lg" />
                     )}
+                    {profile?.is_premium && (
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider border border-amber-200">
+                        <Star className="w-3 h-3 fill-amber-500" />
+                        Premium
+                      </div>
+                    )}
                   </div>
                   <p className="text-gray-500 font-medium">@{profile?.username}</p>
                 </div>
                 <div className="flex flex-wrap justify-center sm:justify-end gap-3">
-                  {isOwnProfile ? (
+                  {isOwnProfile && (
                     <button 
                       onClick={() => setIsEditModalOpen(true)}
                       className="btn-secondary px-4 py-2 text-sm flex items-center gap-2"
@@ -441,7 +450,9 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                       <Edit3 className="w-4 h-4" />
                       Edit Profile
                     </button>
-                  ) : (
+                  )}
+
+                  {!isOwnProfile && !isBlocked && !isBlockingMe && (
                     <div className="flex flex-wrap justify-center sm:justify-end gap-3">
                       <button 
                         onClick={toggleFollow}
@@ -525,6 +536,36 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                       </div>
                     </div>
                   )}
+
+                  {!isOwnProfile && (isBlocked || isBlockingMe) && (
+                    <div className="relative" ref={menuRef}>
+                      <button 
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
+                      >
+                        <MoreHorizontal className="w-5 h-5" />
+                      </button>
+                      
+                      <AnimatePresence>
+                        {isMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-20"
+                          >
+                            <button 
+                              onClick={toggleBlock}
+                              className="w-full px-4 py-2 text-left text-sm font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                            >
+                              <ShieldAlert className="w-4 h-4" />
+                              {isBlocked ? 'Unblock User' : 'Block User'}
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -559,13 +600,13 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                 <div className="flex flex-wrap gap-4 text-sm text-gray-500 font-medium">
                   {profile?.workplace && (
                     <div className="flex items-center gap-1.5">
-                      <Shield className="w-4 h-4" />
+                      <Briefcase className="w-4 h-4" />
                       <span>Works at <span className="text-gray-900">{profile.workplace}</span></span>
                     </div>
                   )}
                   {profile?.school && (
                     <div className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4" />
+                      <GraduationCap className="w-4 h-4" />
                       <span>Studied at <span className="text-gray-900">{profile.school}</span></span>
                     </div>
                   )}
@@ -577,7 +618,7 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                   )}
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-4 h-4" />
-                    <span>Joined April 2026</span>
+                    <span>Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'April 2026'}</span>
                   </div>
                 </div>
 
@@ -664,6 +705,49 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
           )}
         </div>
       )}
+
+      {/* Block Confirmation Modal */}
+      <AnimatePresence>
+        {showBlockConfirm && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBlockConfirm(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-sm bg-white rounded-[32px] p-8 text-center shadow-2xl"
+            >
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-8 h-8 text-rose-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Block User?</h3>
+              <p className="text-gray-500 mb-8">
+                They will no longer be able to see your profile, posts, or message you. You can unblock them anytime from your settings.
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowBlockConfirm(false)}
+                  className="flex-1 btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={toggleBlock}
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-full transition-all active:scale-95"
+                >
+                  Block
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Connections Modal */}
       <AnimatePresence>
@@ -758,17 +842,37 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
                 </button>
               </div>
 
-              <form onSubmit={handleUpdateProfile} className="p-6 space-y-4">
-                <div className="flex justify-center mb-6">
+              <form onSubmit={handleUpdateProfile} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto no-scrollbar">
+                {/* Cover Preview in Edit */}
+                <div className="relative h-32 rounded-2xl overflow-hidden bg-gray-100 mb-6 group">
+                  {editForm.cover_url ? (
+                    <img src={editForm.cover_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-r from-emerald-100 to-teal-100" />
+                  )}
+                  <div 
+                    onClick={() => coverInputRef.current?.click()}
+                    className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                  >
+                    <Camera className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+
+                <div className="flex justify-center -mt-12 mb-6 relative z-10">
                   <div className="relative group">
-                    <div className="w-24 h-24 rounded-[24px] bg-gray-100 overflow-hidden">
-                      {editForm.avatar_url ? (
-                        <img src={editForm.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400"><Camera className="w-8 h-8" /></div>
-                      )}
+                    <div className="w-24 h-24 rounded-[24px] bg-white p-1 shadow-lg">
+                      <div className="w-full h-full rounded-[20px] bg-gray-100 overflow-hidden">
+                        {editForm.avatar_url ? (
+                          <img src={editForm.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400"><Camera className="w-8 h-8" /></div>
+                        )}
+                      </div>
                     </div>
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-[24px] cursor-pointer">
+                    <div 
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-[24px] cursor-pointer"
+                    >
                       <Camera className="w-6 h-6 text-white" />
                     </div>
                   </div>
@@ -841,7 +945,14 @@ export default function ProfilePage({ userId, onNavigate }: ProfilePageProps) {
 
                 <div className="pt-4 flex gap-3">
                   <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 btn-secondary py-3">Cancel</button>
-                  <button type="submit" className="flex-1 btn-primary py-3">Save Changes</button>
+                  <button 
+                    type="submit" 
+                    disabled={isUpdating}
+                    className="flex-1 btn-primary py-3 flex items-center justify-center gap-2"
+                  >
+                    {isUpdating && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {isUpdating ? 'Saving...' : 'Save Changes'}
+                  </button>
                 </div>
               </form>
             </motion.div>

@@ -27,15 +27,19 @@ export default function NotificationCenter({ onUserClick, onNotificationClick }:
     
     // Mark all as read when entering the notification center
     const markAsReadOnMount = async () => {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-      
-      if (!error) {
+      try {
+        const { error } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+        
+        if (error) throw error;
+        
         refreshBadgeCount(0);
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      } catch (error) {
+        console.error('Error marking notifications as read:', error);
       }
     };
     

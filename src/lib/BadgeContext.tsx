@@ -60,10 +60,10 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
     refreshTimeoutRef.current = setTimeout(async () => {
       if (!user) return;
       await Promise.all([
-        optNotifications === undefined ? fetchUnreadNotifications() : Promise.resolve(),
-        optMessages === undefined ? fetchUnreadMessages() : Promise.resolve()
+        fetchUnreadNotifications(),
+        fetchUnreadMessages()
       ]);
-    }, 800);
+    }, 100);
   }, [user?.id, fetchUnreadNotifications, fetchUnreadMessages]);
 
   const refreshNotifications = useCallback((count?: number) => fetchUnreadCounts(count, undefined), [fetchUnreadCounts]);

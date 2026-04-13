@@ -98,15 +98,28 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
     const markAllAsReadOnMount = async () => {
       if (isSidebar) return;
       
-      const { error } = await supabase
-        .from('messages')
-        .update({ is_read: true, seen_at: new Date().toISOString(), status: 'seen' })
-        .eq('receiver_id', user.id)
-        .eq('is_read', false);
-      
-      if (!error) {
+      try {
+        const { error } = await supabase
+          .from('messages')
+          .update({ is_read: true, seen_at: new Date().toISOString(), status: 'seen' })
+          .eq('receiver_id', user.id)
+          .eq('is_read', false);
+        
+        if (error) throw error;
+        
+        // Also mark all message notifications as read
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('type', 'message')
+          .eq('is_read', false);
+
         refreshBadgeCount(0);
-        fetchContacts(); // Refresh the contact list badges
+        setUnreadCounts({});
+        fetchContacts();
+      } catch (error) {
+        console.error('Error marking all messages as read:', error);
       }
     };
     
@@ -351,19 +364,30 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
         ...prev, 
         [sId]: Math.max(0, (prev[sId] || 0) - 1) 
       }));
+
+      // Also mark corresponding notifications as read
+      await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user?.id)
+        .eq('actor_id', sId)
+        .eq('type', 'message')
+        .eq('is_read', false);
     }
 
-    const { error } = await supabase.from('messages').update({ 
-      is_read: true,
-      seen_at: new Date().toISOString(),
-      status: 'seen'
-    }).eq('id', messageId);
+    try {
+      const { error } = await supabase.from('messages').update({ 
+        is_read: true,
+        seen_at: new Date().toISOString(),
+        status: 'seen'
+      }).eq('id', messageId);
 
-    if (error) {
-      console.error('Error marking message as read:', error);
-    } else {
+      if (error) throw error;
+      
       refreshBadgeCount();
       fetchContacts(); // Refresh local counts
+    } catch (error) {
+      console.error('Error marking message as read:', error);
     }
   }
 
@@ -521,17 +545,32 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate, i
           setUnreadCounts(prev => ({ ...prev, [activeChat.id]: 0 }));
         }
         
-        await supabase
-          .from('messages')
-          .update({ 
-            is_read: true, 
-            seen_at: new Date().toISOString(),
-            status: 'seen'
-          })
-          .in('id', unreadIds);
-        
-        refreshBadgeCount();
-        fetchContacts(); // Also refresh local unread counts for the sidebar
+        try {
+          const { error } = await supabase
+            .from('messages')
+            .update({ 
+              is_read: true, 
+              seen_at: new Date().toISOString(),
+              status: 'seen'
+            })
+            .in('id', unreadIds);
+          
+          if (error) throw error;
+
+          // Also mark corresponding notifications as read
+          await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('user_id', user?.id)
+            .eq('actor_id', contactId)
+            .eq('type', 'message')
+            .eq('is_read', false);
+          
+          refreshBadgeCount(0); // Optimistically set main badge if possible, or just refresh
+          setTimeout(fetchContacts, 500); // Delay to allow DB to settle
+        } catch (error) {
+          console.error('Error marking messages as read:', error);
+        }
       }
     }
   }

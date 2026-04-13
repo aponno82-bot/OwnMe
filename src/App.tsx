@@ -172,7 +172,7 @@ export default function App() {
           {/* Right Sidebar - Messenger/Activity */}
           <aside className="hidden lg:block lg:col-span-3 sticky top-24 h-[calc(100vh-120px)] overflow-y-auto no-scrollbar">
             <TrendingHashtags onHashtagClick={(tag) => handleNavigate('hashtag', tag)} />
-            <Messenger onNavigate={handleNavigate} />
+            {!isMessengerPage && <Messenger onNavigate={handleNavigate} isSidebar />}
           </aside>
         </div>
       </main>

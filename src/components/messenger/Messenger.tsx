@@ -19,9 +19,10 @@ interface MessengerProps {
   initialContactId?: string | null;
   onUserClick?: (userId: string) => void;
   onNavigate?: (page: string, params?: any) => void;
+  isSidebar?: boolean;
 }
 
-export default function Messenger({ initialContactId, onUserClick, onNavigate }: MessengerProps) {
+export default function Messenger({ initialContactId, onUserClick, onNavigate, isSidebar }: MessengerProps) {
   const { user, profile } = useAuth();
   const { refreshMessages: refreshBadgeCount } = useBadges();
   const { isUserOnline } = usePresence();
@@ -93,8 +94,10 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
     fetchConnections();
     fetchChatSettings();
 
-    // Mark all as read when entering the messenger
+    // Mark all as read when entering the messenger (only for main messenger)
     const markAllAsReadOnMount = async () => {
+      if (isSidebar) return;
+      
       const { error } = await supabase
         .from('messages')
         .update({ is_read: true, seen_at: new Date().toISOString(), status: 'seen' })
@@ -146,9 +149,15 @@ export default function Messenger({ initialContactId, onUserClick, onNavigate }:
         } else if (payload.eventType === 'UPDATE') {
           const updatedMsg = payload.new as Message;
           setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+          
+          // If a message was marked as read, refresh contacts to update unread badges
+          if (payload.old && (payload.old as any).is_read === false && (payload.new as any).is_read === true) {
+            fetchContacts();
+          }
         } else if (payload.eventType === 'DELETE') {
           const deletedId = (payload.old as any).id;
           setMessages(prev => prev.filter(m => m.id !== deletedId));
+          fetchContacts();
         }
       })
       .on('presence', { event: 'sync' }, () => {
